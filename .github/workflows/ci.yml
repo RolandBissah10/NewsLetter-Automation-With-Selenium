@@ -41,14 +41,69 @@ jobs:
           name: surefire-reports
           path: target/surefire-reports
 
-      - name: Slack notification (optional)
-        if: always() && secrets.SLACK_WEBHOOK != ''
-        env:
-          STATUS: ${{ steps.mvn-test.outcome }}
-          WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-        run: |
-          if [ "$STATUS" = "success" ]; then text="✅ Tests passed for $GITHUB_REPOSITORY (#$GITHUB_RUN_NUMBER)"; else text="❌ Tests failed for $GITHUB_REPOSITORY (#$GITHUB_RUN_NUMBER)"; fi
-          curl -X POST -H 'Content-type: application/json' --data "{\"text\": \"$text\"}" "$WEBHOOK"
+      - name: Slack notification on success
+        if: always() && success() && secrets.SLACK_WEBHOOK != ''
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK }}
+          payload: |
+            {
+              "text": "✅ Tests passed for ${{ github.repository }} (#${{ github.run_number }})",
+              "attachments": [
+                {
+                  "color": "good",
+                  "fields": [
+                    {
+                      "title": "Repository",
+                      "value": "${{ github.repository }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Branch",
+                      "value": "${{ github.ref_name }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Run",
+                      "value": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>",
+                      "short": false
+                    }
+                  ]
+                }
+              ]
+            }
+
+      - name: Slack notification on failure
+        if: always() && failure() && secrets.SLACK_WEBHOOK != ''
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK }}
+          payload: |
+            {
+              "text": "❌ Tests failed for ${{ github.repository }} (#${{ github.run_number }})",
+              "attachments": [
+                {
+                  "color": "danger",
+                  "fields": [
+                    {
+                      "title": "Repository",
+                      "value": "${{ github.repository }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Branch",
+                      "value": "${{ github.ref_name }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Run",
+                      "value": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>",
+                      "short": false
+                    }
+                  ]
+                }
+              ]
+            }
 
       - name: Email notification (optional)
         if: always() && secrets.SMTP_SERVER != ''
