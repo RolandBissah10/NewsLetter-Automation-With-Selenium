@@ -1,0 +1,64 @@
+name: CI - Selenium tests
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Cache Maven local repository
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Run Maven tests
+        id: mvn-test
+        env:
+          CI: true
+        run: mvn -B -Dheadless=true test
+
+      - name: Upload surefire reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: target/surefire-reports
+
+      - name: Slack notification (optional)
+        if: ${{ secrets.SLACK_WEBHOOK != '' }}
+        env:
+          STATUS: ${{ steps.mvn-test.outcome }}
+          WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+        run: |
+          if [ "$STATUS" = "success" ]; then text="✅ Tests passed for $GITHUB_REPOSITORY (#$GITHUB_RUN_NUMBER)"; else text="❌ Tests failed for $GITHUB_REPOSITORY (#$GITHUB_RUN_NUMBER)"; fi
+          curl -X POST -H 'Content-type: application/json' --data "{\"text\": \"$text\"}" "$WEBHOOK"
+
+      - name: Email notification (optional)
+        if: ${{ secrets.SMTP_SERVER != '' }}
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "CI ${{ github.repository }} (run #${{ github.run_number }}) - ${{ steps.mvn-test.outcome }}"
+          to: ${{ secrets.NOTIFY_EMAIL_TO }}
+          from: ${{ secrets.NOTIFY_EMAIL_FROM }}
+          body: "Build result: ${{ steps.mvn-test.outcome }}. View run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
