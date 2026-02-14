@@ -10,7 +10,8 @@ public class NewsLetterTest extends Setup {
     @Test
     @DisplayName("Verify alert is shown when email input is empty")
     void testEmptyEmail() {
-        // Act
+        // Act - hover to show button interaction
+        newsLetterPage.hoverOverSubmitButton();
         newsLetterPage.clickSubmit();
 
         // Assert
@@ -46,10 +47,13 @@ public class NewsLetterTest extends Setup {
         newsLetterPage.subscribe("test@example.com");
         Assertions.assertTrue(successPage.isOnSuccessPage(), "Setup: should be on success page");
 
-        // Act
+        // Act - hover to show dismiss button interaction
+        successPage.hoverOverDismissButton();
         successPage.clickDismiss();
 
-        // Assert
+        // Assert - verify fresh signup page with no error and empty input
         Assertions.assertTrue(newsLetterPage.isSignupVisible(), "Signup card should be visible after dismiss");
+        Assertions.assertTrue(newsLetterPage.isErrorHidden(), "Error should NOT be visible on fresh signup page");
+        Assertions.assertTrue(newsLetterPage.isEmailInputEmpty(), "Email input should be empty on fresh signup page");
     }
 }

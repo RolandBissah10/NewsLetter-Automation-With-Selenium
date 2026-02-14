@@ -43,6 +43,10 @@ public class NewsLetterPage extends BasePage {
         return isVisible(errorMessage);
     }
 
+    public boolean isErrorHidden() {
+        return !isErrorVisible();
+    }
+
     public String getErrorMessageText() {
         WebElement e = waitForVisibility(errorMessage);
         return e.getText().trim();
@@ -50,5 +54,17 @@ public class NewsLetterPage extends BasePage {
 
     public boolean isSignupVisible() {
         return isVisible(signupCard);
+    }
+
+    public String getEmailValue() {
+        return getValue(emailInput);
+    }
+
+    public boolean isEmailInputEmpty() {
+        return getEmailValue().isEmpty();
+    }
+
+    public void hoverOverSubmitButton() {
+        hoverOver(submitButton);
     }
 }

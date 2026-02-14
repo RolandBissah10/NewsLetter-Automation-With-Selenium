@@ -20,6 +20,10 @@ public class SuccessPage extends BasePage {
         return isVisible(successMessage);
     }
 
+    public void hoverOverDismissButton() {
+        hoverOver(dismissButton);
+    }
+
     public void clickDismiss() {
         click(dismissButton);
     }
