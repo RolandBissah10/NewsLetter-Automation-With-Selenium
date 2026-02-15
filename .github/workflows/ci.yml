@@ -94,7 +94,7 @@ jobs:
 
       - name: Email notification (optional)
         if: steps.check-notifications.outputs.email == 'true'
-        uses: dawidd6/action-send-mail@v3
+        uses: dawidd6/action-send-mail@v3W
         with:
           server_address: ${{ secrets.SMTP_SERVER }}
           server_port: ${{ secrets.SMTP_PORT }}

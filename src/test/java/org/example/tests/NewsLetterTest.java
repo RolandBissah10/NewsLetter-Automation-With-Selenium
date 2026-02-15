@@ -18,7 +18,6 @@ public class NewsLetterTest extends Setup {
         // Act - hover to show button interaction
         newsLetterPage.hoverOverSubmitButton();
         newsLetterPage.clickSubmit();
-        Thread.sleep(500);
 
         // Assert
         Assertions.assertTrue(newsLetterPage.isErrorVisible(), "Error box should be visible for empty email");
@@ -32,7 +31,6 @@ public class NewsLetterTest extends Setup {
         // Act - hover and subscribe with invalid email
         newsLetterPage.hoverOverSubmitButton();
         newsLetterPage.subscribe("fracis-bissah-amalitech.com");
-        Thread.sleep(500);
 
         // Assert
         Assertions.assertTrue(newsLetterPage.isErrorVisible(), "Error box should be visible for invalid email");
@@ -46,7 +44,6 @@ public class NewsLetterTest extends Setup {
         // Act - hover and subscribe with valid email
         newsLetterPage.hoverOverSubmitButton();
         newsLetterPage.subscribe("francis.bissah@amalitech.com");
-        Thread.sleep(500);
 
         // Assert
         Assertions.assertTrue(successPage.isOnSuccessPage(), "Should land on success message after subscribing");
@@ -59,14 +56,11 @@ public class NewsLetterTest extends Setup {
         // Arrange: hover and subscribe to navigate to success page
         newsLetterPage.hoverOverSubmitButton();
         newsLetterPage.subscribe("francis.bissah@example.com");
-        Thread.sleep(500);
         Assertions.assertTrue(successPage.isOnSuccessPage(), "Setup: should be on success page");
 
         // Act - hover and click dismiss button
         successPage.hoverOverDismissButton();
-        Thread.sleep(500);
         successPage.clickDismiss();
-        Thread.sleep(500);
 
         // Assert - verify fresh signup page with no error and empty input
         Assertions.assertTrue(newsLetterPage.isSignupVisible(), "Signup card should be visible after dismiss");
