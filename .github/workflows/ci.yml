@@ -5,6 +5,16 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      simulate:
+        description: 'Set to "true" to simulate a failing run (useful to test failure notifications)'
+        required: false
+        default: 'false'
+      test_email:
+        description: 'Set to "true" to send a test email during a manual run'
+        required: false
+        default: 'false'
 
 jobs:
   build-and-test:
@@ -34,6 +44,12 @@ jobs:
           CI: true
         run: mvn -B -Dheadless=true test
 
+      - name: Simulate failure (manual)
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.simulate == 'true' }}
+        run: |
+          echo "Simulating a failing CI job as requested (workflow_dispatch simulate=true)"
+          exit 1
+
       - name: Upload surefire reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -41,35 +57,45 @@ jobs:
           name: surefire-reports
           path: target/surefire-reports
 
-      - name: Slack notification (optional)
-        if: always()
-        env:
-          STATUS: ${{ steps.mvn-test.outcome }}
-          WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-        run: |
-          if [ -z "$WEBHOOK" ]; then
-            echo "⚠️ Slack webhook not configured (SLACK_WEBHOOK secret missing)"
-            exit 0
-          fi
-          if [ "$STATUS" = "success" ]; then 
-            TEXT="✅ Tests passed for $GITHUB_REPOSITORY (#$GITHUB_RUN_NUMBER)\nView: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          else 
-            TEXT="❌ Tests failed for $GITHUB_REPOSITORY (#$GITHUB_RUN_NUMBER)\nView: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          fi
-          curl -v -X POST -H 'Content-type: application/json' \
-            --data "{\"text\": \"$TEXT\"}" \
-            "$WEBHOOK" || echo "⚠️ Slack notification failed"
+      - name: Slack — success
+        if: success() && secrets.SLACK_WEBHOOK != ''
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK }}
+          payload: |
+            {"text":"✅ Tests passed for ${{ github.repository }} (#${{ github.run_number }})\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View details>"}
 
-      - name: Email notification (optional)
-        if: always()
+      - name: Slack — failure
+        if: failure() && secrets.SLACK_WEBHOOK != ''
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK }}
+          payload: |
+            {"text":"❌ Tests failed for ${{ github.repository }} (#${{ github.run_number }})\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View details>"}
+
+      - name: Send test email (manual)
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.test_email == 'true' && secrets.SMTP_SERVER != '' }}
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: ${{ secrets.SMTP_SERVER }}
           server_port: ${{ secrets.SMTP_PORT }}
           username: ${{ secrets.SMTP_USERNAME }}
           password: ${{ secrets.SMTP_PASSWORD }}
-          subject: "CI ${{ github.repository }} (run #${{ github.run_number }}) - ${{ steps.mvn-test.outcome }}"
+          subject: "CI test email — run #${{ github.run_number }}"
           to: ${{ secrets.NOTIFY_EMAIL_TO }}
           from: ${{ secrets.NOTIFY_EMAIL_FROM }}
-          body: "Build result: ${{ steps.mvn-test.outcome }}. View run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          body: "This is a test email from the CI workflow (workflow_dispatch input test_email=true)."
+
+      - name: Email notification (optional)
+        if: secrets.SMTP_SERVER != '' && secrets.NOTIFY_EMAIL_TO != ''
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "CI ${{ github.repository }} (run #${{ github.run_number }}) - ${{ job.status }}"
+          to: ${{ secrets.NOTIFY_EMAIL_TO }}
+          from: ${{ secrets.NOTIFY_EMAIL_FROM }}
+          body: "Build result: ${{ job.status }}. View run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           ignore_cert: true
