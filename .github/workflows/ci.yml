@@ -42,16 +42,26 @@ jobs:
           path: target/surefire-reports
 
       - name: Slack notification (optional)
-        if: always() && secrets.SLACK_WEBHOOK != ''
+        if: always()
         env:
           STATUS: ${{ steps.mvn-test.outcome }}
           WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
         run: |
-          if [ "$STATUS" = "success" ]; then text="✅ Tests passed for $GITHUB_REPOSITORY (#$GITHUB_RUN_NUMBER)"; else text="❌ Tests failed for $GITHUB_REPOSITORY (#$GITHUB_RUN_NUMBER)"; fi
-          curl -X POST -H 'Content-type: application/json' --data "{\"text\": \"$text\"}" "$WEBHOOK"
+          if [ -z "$WEBHOOK" ]; then
+            echo "⚠️ Slack webhook not configured (SLACK_WEBHOOK secret missing)"
+            exit 0
+          fi
+          if [ "$STATUS" = "success" ]; then 
+            TEXT="✅ Tests passed for $GITHUB_REPOSITORY (#$GITHUB_RUN_NUMBER)\nView: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          else 
+            TEXT="❌ Tests failed for $GITHUB_REPOSITORY (#$GITHUB_RUN_NUMBER)\nView: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          fi
+          curl -v -X POST -H 'Content-type: application/json' \
+            --data "{\"text\": \"$TEXT\"}" \
+            "$WEBHOOK" || echo "⚠️ Slack notification failed"
 
       - name: Email notification (optional)
-        if: always() && secrets.SMTP_SERVER != ''
+        if: always()
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: ${{ secrets.SMTP_SERVER }}
@@ -62,3 +72,4 @@ jobs:
           to: ${{ secrets.NOTIFY_EMAIL_TO }}
           from: ${{ secrets.NOTIFY_EMAIL_FROM }}
           body: "Build result: ${{ steps.mvn-test.outcome }}. View run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          ignore_cert: true
