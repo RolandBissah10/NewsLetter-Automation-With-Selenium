@@ -57,8 +57,14 @@ jobs:
           name: surefire-reports
           path: target/surefire-reports
 
+      - name: Check notification secrets
+        id: check-notifications
+        run: |
+          if [ -n "${{ secrets.SLACK_WEBHOOK }}" ]; then echo "slack=true" >> $GITHUB_OUTPUT; else echo "slack=false" >> $GITHUB_OUTPUT; fi
+          if [ -n "${{ secrets.SMTP_SERVER }}" ] && [ -n "${{ secrets.NOTIFY_EMAIL_TO }}" ]; then echo "email=true" >> $GITHUB_OUTPUT; else echo "email=false" >> $GITHUB_OUTPUT; fi
+
       - name: Slack — success
-        if: success() && secrets.SLACK_WEBHOOK != ''
+        if: success() && steps.check-notifications.outputs.slack == 'true'
         uses: slackapi/slack-github-action@v1.24.0
         with:
           webhook-url: ${{ secrets.SLACK_WEBHOOK }}
@@ -66,7 +72,7 @@ jobs:
             {"text":"✅ Tests passed for ${{ github.repository }} (#${{ github.run_number }})\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View details>"}
 
       - name: Slack — failure
-        if: failure() && secrets.SLACK_WEBHOOK != ''
+        if: failure() && steps.check-notifications.outputs.slack == 'true'
         uses: slackapi/slack-github-action@v1.24.0
         with:
           webhook-url: ${{ secrets.SLACK_WEBHOOK }}
@@ -74,7 +80,7 @@ jobs:
             {"text":"❌ Tests failed for ${{ github.repository }} (#${{ github.run_number }})\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View details>"}
 
       - name: Send test email (manual)
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.test_email == 'true' && secrets.SMTP_SERVER != '' }}
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.test_email == 'true' && steps.check-notifications.outputs.email == 'true'
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: ${{ secrets.SMTP_SERVER }}
@@ -87,7 +93,7 @@ jobs:
           body: "This is a test email from the CI workflow (workflow_dispatch input test_email=true)."
 
       - name: Email notification (optional)
-        if: secrets.SMTP_SERVER != '' && secrets.NOTIFY_EMAIL_TO != ''
+        if: steps.check-notifications.outputs.email == 'true'
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: ${{ secrets.SMTP_SERVER }}
