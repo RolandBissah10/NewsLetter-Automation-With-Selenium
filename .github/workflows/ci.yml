@@ -82,31 +82,82 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: Slack — success
+        if: needs.build-and-test.result == 'success'
+        uses: slackapi/slack-github-action@v1.24.0
         with:
-          python-version: '3.11'
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          payload: |
+            {
+              "text": "✅ Tests passed for ${{ github.repository }} (#${{ github.run_number }})",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "✅ *Tests Passed*\n*Repository:* ${{ github.repository }}\n*Run #:* ${{ github.run_number }}\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>"
+                  }
+                }
+              ]
+            }
+        continue-on-error: true
 
-      - name: Install dependencies
-        run: |
-          pip install requests
+      - name: Slack — failure
+        if: needs.build-and-test.result != 'success'
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL}}
+          payload: |
+            {
+              "text": "❌ Tests failed for ${{ github.repository }} (#${{ github.run_number }})",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "❌ *Tests Failed*\n*Repository:* ${{ github.repository }}\n*Run #:* ${{ github.run_number }}\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>"
+                  }
+                }
+              ]
+            }
+        continue-on-error: true
 
-      - name: Send notifications
-        env:
-          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
-          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
-          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
-          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-          NOTIFY_EMAIL_TO: ${{ secrets.NOTIFY_EMAIL_TO }}
-          NOTIFY_EMAIL_FROM: ${{ secrets.NOTIFY_EMAIL_FROM }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_RUN_NUMBER: ${{ github.run_number }}
-          GITHUB_RUN_ID: ${{ github.run_id }}
-          GITHUB_SERVER_URL: ${{ github.server_url }}
-        run: |
-          python .github/scripts/notify.py "${{ needs.build-and-test.result }}"
+      - name: Email notification — success
+        if: needs.build-and-test.result == 'success'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "✅ CI ${{ github.repository }} (run #${{ github.run_number }}) - SUCCESS"
+          to: ${{ secrets.NOTIFY_EMAIL_TO }}
+          from: ${{ secrets.NOTIFY_EMAIL_FROM }}
+          body: |
+            Build Status: SUCCESS
+
+            Repository: ${{ github.repository }}
+            Run Number: ${{ github.run_number }}
+
+            View Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        continue-on-error: true
+
+      - name: Email notification — failure
+        if: needs.build-and-test.result != 'success'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "❌ CI ${{ github.repository }} (run #${{ github.run_number }}) - FAILED"
+          to: ${{ secrets.NOTIFY_EMAIL_TO }}
+          from: ${{ secrets.NOTIFY_EMAIL_FROM }}
+          body: |
+            Build Status: FAILED
+
+            Repository: ${{ github.repository }}
+            Run Number: ${{ github.run_number }}
+
+            View Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         continue-on-error: true
