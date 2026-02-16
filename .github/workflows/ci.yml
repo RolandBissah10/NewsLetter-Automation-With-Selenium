@@ -106,7 +106,7 @@ jobs:
         if: needs.build-and-test.result == 'success'
         uses: slackapi/slack-github-action@v1.24.0
         with:
-          webhook-url: ${{ secrets.SLACK_WEBHOOK }}
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
           payload: |
             {
               "text": " Tests passed for ${{ github.repository }} (#${{ github.run_number }})",
@@ -126,7 +126,7 @@ jobs:
         if: needs.build-and-test.result != 'success'
         uses: slackapi/slack-github-action@v1.24.0
         with:
-          webhook-url: ${{ secrets.SLACK_WEBHOOK }}
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
           payload: |
             {
               "text": " Tests failed for ${{ github.repository }} (#${{ github.run_number }})",
