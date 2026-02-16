@@ -1,14 +1,18 @@
-name: Selenium CI with Email and Slack (Official Slack Action)
+name: CI - Selenium tests
 
 on:
   push:
-    branches: [ main, master, develop ]
+    branches: [ main, master ]
   pull_request:
-    branches: [ main, master, develop ]
+    branches: [ main, master ]
   workflow_dispatch:
     inputs:
       simulate:
-        description: 'Set to "true" to simulate a failing run'
+        description: 'Set to "true" to simulate a failing run (useful to test failure notifications)'
+        required: false
+        default: 'false'
+      test_email:
+        description: 'Set to "true" to send a test email during a manual run'
         required: false
         default: 'false'
 
@@ -17,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
@@ -25,9 +29,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-          cache: maven
 
-      - name: Cache Maven repository
+      - name: Cache Maven local repository
         uses: actions/cache@v4
         with:
           path: ~/.m2/repository
@@ -45,64 +48,116 @@ jobs:
           google-chrome --version || google-chrome-stable --version || chromium --version || echo "chrome not found"
           chromedriver --version || echo "chromedriver not found"
 
-      - name: Install dependencies
-        run: mvn clean install -DskipTests
+      - name: Run Maven tests (capture log)
+        id: mvn-test
+        env:
+          CI: true
+        run: |
+          set -o pipefail
+          mvn -B -Dheadless=true test | tee mvn.log
 
-      - name: Run Selenium tests
-        run: mvn test
-        continue-on-error: true
-
-      - name: Upload test reports
+      - name: Upload Maven log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: surefire-reports
-          path: target/surefire-reports/
-          retention-days: 30
+          name: mvn-log
+          path: mvn.log
 
       - name: Simulate failure (manual)
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.simulate == 'true' }}
         run: |
-          echo "Simulating a failing CI job"
+          echo "Simulating a failing CI job as requested (workflow_dispatch simulate=true)"
           exit 1
 
-      - name: Send Slack notification
+      - name: Upload surefire reports
         if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: target/surefire-reports
+
+  notify:
+    needs: build-and-test
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Slack — success
+        if: needs.build-and-test.result == 'success'
         uses: slackapi/slack-github-action@v1.24.0
         with:
           webhook-url: ${{ secrets.SLACK_WEBHOOK }}
           payload: |
             {
-              "text": "Selenium CI Notification - ${{ job.status }}",
+              "text": "✅ Tests passed for ${{ github.repository }} (#${{ github.run_number }})",
               "blocks": [
                 {
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*Selenium Test Results*\n*Repository:* ${{ github.repository }}\n*Branch:* ${{ github.ref_name }}\n*Commit:* ${{ github.sha }}\n*Status:* ${{ job.status }}\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>"
+                    "text": "✅ *Tests Passed*\n*Repository:* ${{ github.repository }}\n*Run #:* ${{ github.run_number }}\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>"
                   }
                 }
               ]
             }
         continue-on-error: true
 
-      - name: Send email notification
-        if: always()
+      - name: Slack — failure
+        if: needs.build-and-test.result != 'success'
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK }}
+          payload: |
+            {
+              "text": "❌ Tests failed for ${{ github.repository }} (#${{ github.run_number }})",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "❌ *Tests Failed*\n*Repository:* ${{ github.repository }}\n*Run #:* ${{ github.run_number }}\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>"
+                  }
+                }
+              ]
+            }
+        continue-on-error: true
+
+      - name: Email notification — success
+        if: needs.build-and-test.result == 'success'
         uses: dawidd6/action-send-mail@v3
         with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          username: ${{ secrets.EMAIL_USERNAME }}
-          password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: "Selenium Tests ${{ job.status }} - ${{ github.repository }}"
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "✅ CI ${{ github.repository }} (run #${{ github.run_number }}) - SUCCESS"
+          to: ${{ secrets.NOTIFY_EMAIL_TO }}
+          from: ${{ secrets.NOTIFY_EMAIL_FROM }}
           body: |
-            Build Status: ${{ job.status }}
-            Repository: ${{ github.repository }}
-            Branch: ${{ github.ref }}
-            Commit: ${{ github.sha }}
-            Workflow: ${{ github.workflow }}
-            Run: ${{ github.run_number }}
+            Build Status: SUCCESS
 
-            View details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          to: ${{ secrets.EMAIL_TO }}
-          from: GitHub Actions
+            Repository: ${{ github.repository }}
+            Run Number: ${{ github.run_number }}
+
+            View Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        continue-on-error: true
+
+      - name: Email notification — failure
+        if: needs.build-and-test.result != 'success'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "❌ CI ${{ github.repository }} (run #${{ github.run_number }}) - FAILED"
+          to: ${{ secrets.NOTIFY_EMAIL_TO }}
+          from: ${{ secrets.NOTIFY_EMAIL_FROM }}
+          body: |
+            Build Status: FAILED
+
+            Repository: ${{ github.repository }}
+            Run Number: ${{ github.run_number }}
+
+            View Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        continue-on-error: true
