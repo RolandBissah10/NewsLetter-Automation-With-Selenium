@@ -1,4 +1,4 @@
-name: Selenium CI with Email and Slack
+name: Selenium CI with Email and Slack (Official Slack Action)
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       simulate:
-        description: 'Set to "true" to simulate a failing run (useful to test failure notifications)'
+        description: 'Set to "true" to simulate a failing run'
         required: false
         default: 'false'
 
@@ -27,7 +27,7 @@ jobs:
           java-version: '17'
           cache: maven
 
-      - name: Cache Maven local repository
+      - name: Cache Maven repository
         uses: actions/cache@v4
         with:
           path: ~/.m2/repository
@@ -63,25 +63,28 @@ jobs:
       - name: Simulate failure (manual)
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.simulate == 'true' }}
         run: |
-          echo "Simulating a failing CI job as requested"
+          echo "Simulating a failing CI job"
           exit 1
 
       - name: Send Slack notification
         if: always()
-        uses: 8398a7/action-slack@v3
+        uses: slackapi/slack-github-action@v1.24.0
         with:
-          status: ${{ job.status }}
-          text: |
-            *Selenium Test Results*
-            Repository: ${{ github.repository }}
-            Branch: ${{ github.ref_name }}
-            Commit: ${{ github.sha }}
-            Status: ${{ job.status }}
-
-            View details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
-        env:
-          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          webhook-url: ${{ secrets.SLACK_WEBHOOK }}
+          payload: |
+            {
+              "text": "Selenium CI Notification - ${{ job.status }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Selenium Test Results*\n*Repository:* ${{ github.repository }}\n*Branch:* ${{ github.ref_name }}\n*Commit:* ${{ github.sha }}\n*Status:* ${{ job.status }}\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>"
+                  }
+                }
+              ]
+            }
+        continue-on-error: true
 
       - name: Send email notification
         if: always()
