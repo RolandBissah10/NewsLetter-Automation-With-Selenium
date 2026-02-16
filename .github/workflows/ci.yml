@@ -82,19 +82,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Debug — Check secrets
-        run: |
-          echo "Checking configured secrets..."
-          echo "SLACK_WEBHOOK_URL: $([ -z '${{ secrets.SLACK_WEBHOOK_URL }}' ] && echo '❌ NOT SET' || echo '✅ SET')"
-          echo "SMTP_SERVER: $([ -z '${{ secrets.SMTP_SERVER }}' ] && echo '❌ NOT SET' || echo '✅ SET')"
-          echo "SMTP_PORT: $([ -z '${{ secrets.SMTP_PORT }}' ] && echo '❌ NOT SET' || echo '✅ SET')"
-          echo "SMTP_USERNAME: $([ -z '${{ secrets.SMTP_USERNAME }}' ] && echo '❌ NOT SET' || echo '✅ SET')"
-          echo "SMTP_PASSWORD: $([ -z '${{ secrets.SMTP_PASSWORD }}' ] && echo '❌ NOT SET' || echo '✅ SET')"
-          echo "NOTIFY_EMAIL_TO: $([ -z '${{ secrets.NOTIFY_EMAIL_TO }}' ] && echo '❌ NOT SET' || echo '✅ SET')"
-          echo "NOTIFY_EMAIL_FROM: $([ -z '${{ secrets.NOTIFY_EMAIL_FROM }}' ] && echo '❌ NOT SET' || echo '✅ SET')"
-
       - name: Slack — success
-        if: needs.build-and-test.result == 'success' && secrets.SLACK_WEBHOOK_URL != ''
+        if: needs.build-and-test.result == 'success'
         uses: slackapi/slack-github-action@v1.24.0
         with:
           webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
@@ -111,12 +100,13 @@ jobs:
                 }
               ]
             }
+        continue-on-error: true
 
       - name: Slack — failure
-        if: needs.build-and-test.result != 'success' && secrets.SLACK_WEBHOOK_URL != ''
+        if: needs.build-and-test.result != 'success'
         uses: slackapi/slack-github-action@v1.24.0
         with:
-          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL}}
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
           payload: |
             {
               "text": "❌ Tests failed for ${{ github.repository }} (#${{ github.run_number }})",
@@ -130,9 +120,10 @@ jobs:
                 }
               ]
             }
+        continue-on-error: true
 
       - name: Email notification — success
-        if: needs.build-and-test.result == 'success' && secrets.SMTP_SERVER != ''
+        if: needs.build-and-test.result == 'success'
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: ${{ secrets.SMTP_SERVER }}
@@ -149,9 +140,10 @@ jobs:
             Run Number: ${{ github.run_number }}
 
             View Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        continue-on-error: true
 
       - name: Email notification — failure
-        if: needs.build-and-test.result != 'success' && secrets.SMTP_SERVER != ''
+        if: needs.build-and-test.result != 'success'
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: ${{ secrets.SMTP_SERVER }}
@@ -168,3 +160,4 @@ jobs:
             Run Number: ${{ github.run_number }}
 
             View Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        continue-on-error: true
