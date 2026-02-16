@@ -33,7 +33,6 @@ public class SuccessPage extends BasePage {
                     return true;
                 }
             } catch (Exception ignored) {
-                // ignore transient issues while probing windows
             }
         }
         // restore original handle if nothing matched
