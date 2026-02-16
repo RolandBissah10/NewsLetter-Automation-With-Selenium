@@ -137,11 +137,11 @@ jobs:
         with:
           server_address: ${{ secrets.SMTP_SERVER }}
           server_port: ${{ secrets.SMTP_PORT }}
-          username: ${{ rolandbissah10@gmail.com }}
-          password: ${{ @Cisco010 }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
           subject: "✅ CI ${{ github.repository }} (run #${{ github.run_number }}) - SUCCESS"
-          to: ${{ rolandbissah10@gmail.com }}
-          from: ${{ rolandbissah10@gmail.com }}
+          to: ${{ secrets.NOTIFY_EMAIL_TO }}
+          from: ${{ secrets.NOTIFY_EMAIL_FROM }}
           body: |
             Build Status: SUCCESS
 
