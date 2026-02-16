@@ -82,8 +82,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Slack — webhook test
+        if: secrets.SLACK_WEBHOOK_URL != ''
+        run: |
+          echo "Testing Slack webhook..."
+          status=$(curl -s -o /dev/null -w "%{http_code}" -X POST -H 'Content-type: application/json' --data '{"text":"GitHub Actions webhook test"}' "${{ secrets.SLACK_WEBHOOK_URL }}")
+          echo "Slack webhook HTTP status: $status"
+          if [ "$status" -ne 200 ] && [ "$status" -ne 201 ] && [ "$status" -ne 204 ]; then
+            echo "⚠ Slack webhook returned non-success status: $status"
+            exit 1
+          else
+            echo "✓ Slack webhook responded OK"
+          fi
+
       - name: Slack — success
-        if: needs.build-and-test.result == 'success'
+        if: needs.build-and-test.result == 'success' && secrets.SLACK_WEBHOOK_URL != ''
         uses: slackapi/slack-github-action@v1.24.0
         with:
           webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
