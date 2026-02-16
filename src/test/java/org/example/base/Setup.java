@@ -36,6 +36,7 @@ public class Setup {
 
         driver.get(BASE_URL);
 
+
         newsLetterPage = new NewsLetterPage(driver);
         successPage = new SuccessPage(driver);
     }
