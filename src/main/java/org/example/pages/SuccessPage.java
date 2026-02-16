@@ -5,11 +5,6 @@ import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.support.FindBy;
 
-/**
- * Success page may open in a separate window/tab on the demo site.
- * Ensure we switch to the correct window before interacting and
- * switch back (or to the remaining window) after clicking dismiss.
- */
 public class SuccessPage extends BasePage {
 
     private static final By SUCCESS_MESSAGE_BY = By.id("success-message");

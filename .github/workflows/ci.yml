@@ -38,11 +38,30 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-
 
-      - name: Run Maven tests
+      - name: Runner / browser diagnostics
+        run: |
+          echo "--- environment ---"
+          uname -a || true
+          java -version || true
+          mvn -v || true
+          echo "--- chrome / driver ---"
+          google-chrome --version || google-chrome-stable --version || chromium --version || echo "chrome not found"
+          chromedriver --version || echo "chromedriver not found"
+
+      - name: Run Maven tests (capture log)
         id: mvn-test
         env:
           CI: true
-        run: mvn -B -Dheadless=true test
+        run: |
+          set -o pipefail
+          mvn -B -Dheadless=true test | tee mvn.log
+
+      - name: Upload Maven log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mvn-log
+          path: mvn.log
 
       - name: Simulate failure (manual)
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.simulate == 'true' }}
@@ -57,51 +76,37 @@ jobs:
           name: surefire-reports
           path: target/surefire-reports
 
-      - name: Check notification secrets
-        id: check-notifications
+  notify:
+    needs: build-and-test
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
         run: |
-          if [ -n "${{ secrets.SLACK_WEBHOOK }}" ]; then echo "slack=true" >> $GITHUB_OUTPUT; else echo "slack=false" >> $GITHUB_OUTPUT; fi
-          if [ -n "${{ secrets.SMTP_SERVER }}" ] && [ -n "${{ secrets.NOTIFY_EMAIL_TO }}" ]; then echo "email=true" >> $GITHUB_OUTPUT; else echo "email=false" >> $GITHUB_OUTPUT; fi
+          pip install requests
 
-      - name: Slack — success
-        if: success() && steps.check-notifications.outputs.slack == 'true'
-        uses: slackapi/slack-github-action@v1.24.0
-        with:
-          webhook-url: ${{ secrets.SLACK_WEBHOOK }}
-          payload: |
-            {"text":"✅ Tests passed for ${{ github.repository }} (#${{ github.run_number }})\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View details>"}
-
-      - name: Slack — failure
-        if: failure() && steps.check-notifications.outputs.slack == 'true'
-        uses: slackapi/slack-github-action@v1.24.0
-        with:
-          webhook-url: ${{ secrets.SLACK_WEBHOOK }}
-          payload: |
-            {"text":"❌ Tests failed for ${{ github.repository }} (#${{ github.run_number }})\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View details>"}
-
-      - name: Send test email (manual)
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.test_email == 'true' && steps.check-notifications.outputs.email == 'true'
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: ${{ secrets.SMTP_SERVER }}
-          server_port: ${{ secrets.SMTP_PORT }}
-          username: ${{ secrets.SMTP_USERNAME }}
-          password: ${{ secrets.SMTP_PASSWORD }}
-          subject: "CI test email — run #${{ github.run_number }}"
-          to: ${{ secrets.NOTIFY_EMAIL_TO }}
-          from: ${{ secrets.NOTIFY_EMAIL_FROM }}
-          body: "This is a test email from the CI workflow (workflow_dispatch input test_email=true)."
-
-      - name: Email notification (optional)
-        if: steps.check-notifications.outputs.email == 'true'
-        uses: dawidd6/action-send-mail@v3W
-        with:
-          server_address: ${{ secrets.SMTP_SERVER }}
-          server_port: ${{ secrets.SMTP_PORT }}
-          username: ${{ secrets.SMTP_USERNAME }}
-          password: ${{ secrets.SMTP_PASSWORD }}
-          subject: "CI ${{ github.repository }} (run #${{ github.run_number }}) - ${{ job.status }}"
-          to: ${{ secrets.NOTIFY_EMAIL_TO }}
-          from: ${{ secrets.NOTIFY_EMAIL_FROM }}
-          body: "Build result: ${{ job.status }}. View run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          ignore_cert: true
+      - name: Send notifications
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          NOTIFY_EMAIL_TO: ${{ secrets.NOTIFY_EMAIL_TO }}
+          NOTIFY_EMAIL_FROM: ${{ secrets.NOTIFY_EMAIL_FROM }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+        run: |
+          python .github/scripts/notify.py "${{ needs.build-and-test.result }}"
+        continue-on-error: true
