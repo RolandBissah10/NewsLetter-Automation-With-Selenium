@@ -41,79 +41,18 @@ jobs:
           name: surefire-reports
           path: target/surefire-reports
 
-      - name: Slack notification on success
-        if: always() && success() && secrets.SLACK_WEBHOOK != ''
-        uses: slackapi/slack-github-action@v1.24.0
-        with:
-          webhook-url: ${{ secrets.SLACK_WEBHOOK }}
-          payload: |
-            {
-              "text": "✅ Tests passed for ${{ github.repository }} (#${{ github.run_number }})",
-              "attachments": [
-                {
-                  "color": "good",
-                  "fields": [
-                    {
-                      "title": "Repository",
-                      "value": "${{ github.repository }}",
-                      "short": true
-                    },
-                    {
-                      "title": "Branch",
-                      "value": "${{ github.ref_name }}",
-                      "short": true
-                    },
-                    {
-                      "title": "Run",
-                      "value": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>",
-                      "short": false
-                    }
-                  ]
-                }
-              ]
-            }
+  notify-slack:
+    needs: build-and-test
+    if: always()
+    uses: ./.github/workflows/slack-notification.yml
+    secrets: inherit
+    with:
+      status: ${{ needs.build-and-test.result }}
 
-      - name: Slack notification on failure
-        if: always() && failure() && secrets.SLACK_WEBHOOK != ''
-        uses: slackapi/slack-github-action@v1.24.0
-        with:
-          webhook-url: ${{ secrets.SLACK_WEBHOOK }}
-          payload: |
-            {
-              "text": "❌ Tests failed for ${{ github.repository }} (#${{ github.run_number }})",
-              "attachments": [
-                {
-                  "color": "danger",
-                  "fields": [
-                    {
-                      "title": "Repository",
-                      "value": "${{ github.repository }}",
-                      "short": true
-                    },
-                    {
-                      "title": "Branch",
-                      "value": "${{ github.ref_name }}",
-                      "short": true
-                    },
-                    {
-                      "title": "Run",
-                      "value": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>",
-                      "short": false
-                    }
-                  ]
-                }
-              ]
-            }
-
-      - name: Email notification (optional)
-        if: always() && secrets.SMTP_SERVER != ''
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: ${{ secrets.SMTP_SERVER }}
-          server_port: ${{ secrets.SMTP_PORT }}
-          username: ${{ secrets.SMTP_USERNAME }}
-          password: ${{ secrets.SMTP_PASSWORD }}
-          subject: "CI ${{ github.repository }} (run #${{ github.run_number }}) - ${{ steps.mvn-test.outcome }}"
-          to: ${{ secrets.NOTIFY_EMAIL_TO }}
-          from: ${{ secrets.NOTIFY_EMAIL_FROM }}
-          body: "Build result: ${{ steps.mvn-test.outcome }}. View run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+  notify-email:
+    needs: build-and-test
+    if: always()
+    uses: ./.github/workflows/email-notification.yml
+    secrets: inherit
+    with:
+      status: ${{ needs.build-and-test.result }}

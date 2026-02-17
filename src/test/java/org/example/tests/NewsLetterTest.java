@@ -1,53 +1,66 @@
+
 package org.example.tests;
 
 import org.example.base.Setup;
+import org.example.utils.TestData;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestMethodOrder;
+import org.junit.jupiter.api.MethodOrderer;
 
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class NewsLetterTest extends Setup {
 
     @Test
+    @Order(1)
     @DisplayName("Verify alert is shown when email input is empty")
-    void testEmptyEmail() {
+    void testEmptyEmail() throws InterruptedException {
         // Act - hover to show button interaction
         newsLetterPage.hoverOverSubmitButton();
         newsLetterPage.clickSubmit();
 
         // Assert
         Assertions.assertTrue(newsLetterPage.isErrorVisible(), "Error box should be visible for empty email");
-        Assertions.assertEquals("Valid email required", newsLetterPage.getErrorMessageText());
+        Assertions.assertEquals(TestData.ERROR_MESSAGE_REQUIRED, newsLetterPage.getErrorMessageText());
     }
 
     @Test
+    @Order(2)
     @DisplayName("Verify alert is shown for invalid email")
-    void testInvalidEmail() {
-        // Act
-        newsLetterPage.subscribe("invalid-email");
+    void testInvalidEmail() throws InterruptedException {
+        // Act - hover and subscribe with invalid email
+        newsLetterPage.hoverOverSubmitButton();
+        newsLetterPage.subscribe(TestData.INVALID_EMAIL);
 
         // Assert
         Assertions.assertTrue(newsLetterPage.isErrorVisible(), "Error box should be visible for invalid email");
-        Assertions.assertEquals("Valid email required", newsLetterPage.getErrorMessageText());
+        Assertions.assertEquals(TestData.ERROR_MESSAGE_REQUIRED, newsLetterPage.getErrorMessageText());
     }
 
     @Test
+    @Order(3)
     @DisplayName("Verify successful subscription with valid email")
-    void testValidEmail() {
-        // Act
-        newsLetterPage.subscribe("test@example.com");
-
+    void testValidEmail() throws InterruptedException {
+        // Act - hover and subscribe with valid email
+        newsLetterPage.hoverOverSubmitButton();
+        newsLetterPage.subscribe(TestData.VALID_EMAIL);
         // Assert
         Assertions.assertTrue(successPage.isOnSuccessPage(), "Should land on success message after subscribing");
     }
 
     @Test
+    @Order(4)
     @DisplayName("Verify dismiss button returns to signup page")
-    void testDismissButton() {
-        // Arrange: navigate to success page
-        newsLetterPage.subscribe("test@example.com");
+    void testDismissButton() throws InterruptedException {
+        // Arrange: hover and subscribe to navigate to success page
+        newsLetterPage.hoverOverSubmitButton();
+        newsLetterPage.subscribe(TestData.VALID_EMAIL);
         Assertions.assertTrue(successPage.isOnSuccessPage(), "Setup: should be on success page");
+        Thread.sleep(1000);
 
-        // Act - hover to show dismiss button interaction
+        // Act - hover and click dismiss button
         successPage.hoverOverDismissButton();
         successPage.clickDismiss();
 
