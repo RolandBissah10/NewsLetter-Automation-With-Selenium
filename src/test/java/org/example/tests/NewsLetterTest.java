@@ -19,6 +19,7 @@ public class NewsLetterTest extends Setup {
     @Order(1)
     @DisplayName("Verify alert is shown when email input is empty")
     void testEmptyEmail() throws InterruptedException {
+
         // Act - hover to show button interaction
         newsLetterPage.hoverOverSubmitButton();
         newsLetterPage.clickSubmit();
