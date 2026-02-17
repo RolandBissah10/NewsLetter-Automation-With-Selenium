@@ -12,6 +12,7 @@ import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
 
+@org.junit.jupiter.api.extension.ExtendWith(org.example.utils.TestResultLogger.class)
 public class Setup {
 
     protected static WebDriver driver;

@@ -16,6 +16,7 @@ public abstract class BasePage {
     protected final WebDriver driver;
     protected final WebDriverWait wait;
     protected final Actions actions;
+    protected final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(this.getClass());
 
     public BasePage(WebDriver driver) {
         this.driver = driver;
