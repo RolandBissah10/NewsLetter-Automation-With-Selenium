@@ -1,6 +1,10 @@
+
 package org.example.tests;
 
 import org.example.base.Setup;
+import org.example.pages.NewsLetterPage;
+import org.example.pages.SuccessPage;
+import org.example.utils.TestData;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Order;
@@ -21,7 +25,7 @@ public class NewsLetterTest extends Setup {
 
         // Assert
         Assertions.assertTrue(newsLetterPage.isErrorVisible(), "Error box should be visible for empty email");
-        Assertions.assertEquals("Valid email required", newsLetterPage.getErrorMessageText());
+        Assertions.assertEquals(TestData.ERROR_MESSAGE_REQUIRED, newsLetterPage.getErrorMessageText());
     }
 
     @Test
@@ -30,11 +34,11 @@ public class NewsLetterTest extends Setup {
     void testInvalidEmail() throws InterruptedException {
         // Act - hover and subscribe with invalid email
         newsLetterPage.hoverOverSubmitButton();
-        newsLetterPage.subscribe("fracis-bissah-amalitech.com");
+        newsLetterPage.subscribe(TestData.INVALID_EMAIL);
 
         // Assert
         Assertions.assertTrue(newsLetterPage.isErrorVisible(), "Error box should be visible for invalid email");
-        Assertions.assertEquals("Valid email required", newsLetterPage.getErrorMessageText());
+        Assertions.assertEquals(TestData.ERROR_MESSAGE_REQUIRED, newsLetterPage.getErrorMessageText());
     }
 
     @Test
@@ -43,8 +47,7 @@ public class NewsLetterTest extends Setup {
     void testValidEmail() throws InterruptedException {
         // Act - hover and subscribe with valid email
         newsLetterPage.hoverOverSubmitButton();
-        newsLetterPage.subscribe("francis.bissah@amalitech.com");
-
+        newsLetterPage.subscribe(TestData.VALID_EMAIL);
         // Assert
         Assertions.assertTrue(successPage.isOnSuccessPage(), "Should land on success message after subscribing");
     }
@@ -55,8 +58,9 @@ public class NewsLetterTest extends Setup {
     void testDismissButton() throws InterruptedException {
         // Arrange: hover and subscribe to navigate to success page
         newsLetterPage.hoverOverSubmitButton();
-        newsLetterPage.subscribe("francis.bissah@example.com");
+        newsLetterPage.subscribe(TestData.VALID_EMAIL);
         Assertions.assertTrue(successPage.isOnSuccessPage(), "Setup: should be on success page");
+        Thread.sleep(1000);
 
         // Act - hover and click dismiss button
         successPage.hoverOverDismissButton();

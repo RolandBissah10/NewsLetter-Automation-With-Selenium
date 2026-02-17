@@ -54,68 +54,18 @@ jobs:
           echo "Simulating a failing CI job"
           exit 1
 
-  notify:
+  notify-slack:
     needs: build-and-test
     if: always()
-    runs-on: ubuntu-latest
+    uses: ./.github/workflows/slack-notification.yml
+    secrets: inherit
+    with:
+      status: ${{ needs.build-and-test.result }}
 
-    steps:
-
-      # 🔔 Slack Notification
-      - name: Send Slack Notification
-        run: |
-          STATUS="${{ needs.build-and-test.result }}"
-
-          if [ "$STATUS" = "success" ]; then
-            MESSAGE="✅ Tests Passed"
-          else
-            MESSAGE="❌ Tests Failed"
-          fi
-
-          curl -X POST -H "Content-Type: application/json" \
-          --data "{\"text\":\"$MESSAGE\nRepository: ${{ github.repository }}\nRun #: ${{ github.run_number }}\nWorkflow: ${{ github.workflow }}\nDetails: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
-          ${{ secrets.SLACK_WEBHOOK_URL }}
-
-      # Email - Success
-      - name: Email notification — success
-        if: needs.build-and-test.result == 'success'
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: ${{ secrets.SMTP_SERVER }}
-          server_port: ${{ secrets.SMTP_PORT }}
-          username: ${{ secrets.SMTP_USERNAME }}
-          password: ${{ secrets.SMTP_PASSWORD }}
-          subject: "CI SUCCESS - ${{ github.repository }} (Run #${{ github.run_number }})"
-          to: ${{ secrets.NOTIFY_EMAIL_TO }}
-          from: ${{ secrets.NOTIFY_EMAIL_FROM }}
-          body: |
-            Build Status: SUCCESS
-
-            Repository: ${{ github.repository }}
-            Run Number: ${{ github.run_number }}
-            Workflow: ${{ github.workflow }}
-
-            View Run:
-            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
-      # Email - Failure
-      - name: Email notification — failure
-        if: needs.build-and-test.result != 'success'
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: ${{ secrets.SMTP_SERVER }}
-          server_port: ${{ secrets.SMTP_PORT }}
-          username: ${{ secrets.SMTP_USERNAME }}
-          password: ${{ secrets.SMTP_PASSWORD }}
-          subject: "CI FAILED - ${{ github.repository }} (Run #${{ github.run_number }})"
-          to: ${{ secrets.NOTIFY_EMAIL_TO }}
-          from: ${{ secrets.NOTIFY_EMAIL_FROM }}
-          body: |
-            Build Status: FAILED
-
-            Repository: ${{ github.repository }}
-            Run Number: ${{ github.run_number }}
-            Workflow: ${{ github.workflow }}
-
-            View Run:
-            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+  notify-email:
+    needs: build-and-test
+    if: always()
+    uses: ./.github/workflows/email-notification.yml
+    secrets: inherit
+    with:
+      status: ${{ needs.build-and-test.result }}
