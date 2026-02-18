@@ -124,7 +124,7 @@ jobs:
                     },
                     {
                       "title": "❌ Failed Tests",
-                      "value": "${{ inputs.failed_tests != '' && inputs.failed_tests || 'No failure details available' }}",
+                      "value": "```${{ inputs.failed_tests != '' && inputs.failed_tests || 'No failure details available' }}```",
                       "short": false
                     },
                     {
