@@ -58,9 +58,13 @@ jobs:
             STATUS_LABEL="FAILED"
           fi
 
+          # Write failed_tests to a temp file to avoid shell quoting issues with special chars
+          printf '%s' '${{ inputs.failed_tests }}' > /tmp/failed_tests.txt
+
           FAILED_SECTION=""
-          if [ "${{ inputs.tests_failed }}" != "0" ] && [ -n "${{ inputs.failed_tests }}" ]; then
-            FAILED_SECTION="<h3 style='color:#dc3545;margin-top:24px;'>❌ Failed Tests</h3><pre style='background:#fff5f5;border:1px solid #f5c6cb;border-radius:6px;padding:12px;font-size:13px;white-space:pre-wrap;word-break:break-word;'>${{ inputs.failed_tests }}</pre>"
+          if [ "${{ inputs.tests_failed }}" != "0" ] && [ -s /tmp/failed_tests.txt ]; then
+            FAILED_CONTENT=$(cat /tmp/failed_tests.txt)
+            FAILED_SECTION="<h3 style='color:#dc3545;margin-top:24px;'>Failed Tests</h3><pre style='background:#fff5f5;border:1px solid #f5c6cb;border-radius:6px;padding:14px;font-size:13px;font-family:monospace;white-space:pre-wrap;word-break:break-word;line-height:1.6;'>${FAILED_CONTENT}</pre>"
           fi
 
           HTML_BODY="<!DOCTYPE html>
