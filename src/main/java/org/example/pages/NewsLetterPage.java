@@ -1,30 +1,28 @@
 package org.example.pages;
 
+import org.example.utils.TestData;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.support.FindBy;
-import org.openqa.selenium.support.PageFactory;
 
 public class NewsLetterPage extends BasePage {
+
+    @FindBy(id = TestData.EMAIL_INPUT)
+    private WebElement emailInput;
+
+    @FindBy(id = TestData.SUBSCRIBE_BTN)
+    private WebElement submitButton;
+
+    @FindBy(id = TestData.EMAIL_ERROR)
+    private WebElement errorMessage;
+
+    @FindBy(id = TestData.SIGNUP_CARD)
+    private WebElement signupCard;
 
     public NewsLetterPage(WebDriver driver) {
         super(driver);
     }
 
-    // ===== Locators =====
-    @FindBy(id = "email")
-    private WebElement emailInput;
-
-    @FindBy(id = "subscribe-btn")
-    private WebElement submitButton;
-
-    @FindBy(id = "email-error")
-    private WebElement errorMessage;
-
-    @FindBy(id = "signup-card")
-    private WebElement signupCard;
-
-    // ===== Actions =====
     public void enterEmail(String email) {
         type(emailInput, email);
     }
@@ -38,7 +36,6 @@ public class NewsLetterPage extends BasePage {
         clickSubmit();
     }
 
-    // ===== Validations =====
     public boolean isErrorVisible() {
         return isVisible(errorMessage);
     }
@@ -48,8 +45,7 @@ public class NewsLetterPage extends BasePage {
     }
 
     public String getErrorMessageText() {
-        WebElement e = waitForVisibility(errorMessage);
-        return e.getText().trim();
+        return waitForVisibility(errorMessage).getText().trim();
     }
 
     public boolean isSignupVisible() {
