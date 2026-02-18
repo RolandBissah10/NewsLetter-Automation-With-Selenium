@@ -50,6 +50,9 @@ jobs:
     steps:
       - name: Build Email Body
         id: build-body
+        env:
+          PASSED_TESTS: ${{ inputs.passed_tests }}
+          FAILED_TESTS: ${{ inputs.failed_tests }}
         run: |
           STATUS="${{ inputs.status }}"
           if [ "$STATUS" = "success" ]; then
@@ -62,8 +65,6 @@ jobs:
             STATUS_LABEL="FAILED"
           fi
 
-          PASSED_TESTS="${{ inputs.passed_tests }}"
-          FAILED_TESTS="${{ inputs.failed_tests }}"
           TESTS_FAILED="${{ inputs.tests_failed }}"
 
           # Build passed section

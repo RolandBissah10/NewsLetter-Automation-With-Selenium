@@ -21,6 +21,7 @@ jobs:
       tests_passed:  ${{ steps.parse.outputs.tests_passed }}
       tests_failed:  ${{ steps.parse.outputs.tests_failed }}
       tests_skipped: ${{ steps.parse.outputs.tests_skipped }}
+      passed_tests:  ${{ steps.parse.outputs.passed_tests }}
       failed_tests:  ${{ steps.parse.outputs.failed_tests }}
 
     steps:
@@ -86,13 +87,33 @@ jobs:
 
           PASSED=$((TOTAL - FAILED - SKIPPED))
 
-          # Collect failed test details
+          # Collect passed tests
+          PASSED_TESTS_RAW=""
+          for xml in target/surefire-reports/TEST-*.xml; do
+            [ -f "$xml" ] || continue
+            PASSED_TESTS_RAW+=$(python3 - "$xml" <<'PYEOF'
+          import sys, xml.etree.ElementTree as ET
+          tree = ET.parse(sys.argv[1])
+          root = tree.getroot()
+          parts = []
+          for tc in root.findall('testcase'):
+              classname   = tc.get('classname', '')
+              name        = tc.get('name', '')
+              has_failure = any(child.tag in ('failure', 'error') for child in tc)
+              if not has_failure:
+                  short_class = classname.split('.')[-1]
+                  parts.append(f'[PASS] {short_class} :: {name}')
+          print('\n'.join(parts))
+          PYEOF
+            )
+          done
+
+          # Collect failed tests
           FAILED_TESTS_RAW=""
           for xml in target/surefire-reports/TEST-*.xml; do
             [ -f "$xml" ] || continue
             FAILED_TESTS_RAW+=$(python3 - "$xml" <<'PYEOF'
           import sys, xml.etree.ElementTree as ET
-
           tree = ET.parse(sys.argv[1])
           root = tree.getroot()
           parts = []
@@ -104,24 +125,20 @@ jobs:
                       full_msg  = (child.get('message') or '').strip()
                       msg_lines = full_msg.splitlines()
                       summary   = msg_lines[0] if msg_lines else '(no message)'
-
                       short_class = classname.split('.')[-1]
                       ans = [f'[FAIL] {short_class} :: {name}']
                       ans.append(f'       Reason  : {summary}')
-
                       if 'expected:' in summary and 'but was:' in summary:
                           parts_summary = summary.split('but was:')
                           exp = parts_summary[0].strip()
                           act = 'but was: ' + parts_summary[1].strip()
                           ans.append(f'       {exp}')
                           ans.append(f'       {act}')
-
                       for ml in msg_lines[1:]:
                           ml = ml.strip()
                           if ml and not any(ml in s for s in ans):
                               ans.append('       ' + ml[:300])
                           if len(ans) >= 10: break
-
                       body = (child.text or '')
                       loc  = ''
                       for ln in body.splitlines():
@@ -129,7 +146,6 @@ jobs:
                           if stripped.startswith('at org.example') and '.java:' in stripped:
                               loc = stripped[len('at '):]
                               break
-
                       if loc:
                           ans.append(f'       Location: {loc}')
                       parts.append('\n'.join(ans))
@@ -144,10 +160,32 @@ jobs:
           echo "tests_skipped=$SKIPPED" >> "$GITHUB_OUTPUT"
 
           {
+            echo "passed_tests<<EOF_PASSED"
+            echo "$PASSED_TESTS_RAW"
+            echo "EOF_PASSED"
+          } >> "$GITHUB_OUTPUT"
+
+          {
             echo "failed_tests<<EOF_FAILED"
             echo "$FAILED_TESTS_RAW"
             echo "EOF_FAILED"
           } >> "$GITHUB_OUTPUT"
+
+      - name: Debug - Print Parsed Outputs
+        if: always()
+        run: |
+          echo "=== tests_total ==="
+          echo "${{ steps.parse.outputs.tests_total }}"
+          echo "=== tests_passed ==="
+          echo "${{ steps.parse.outputs.tests_passed }}"
+          echo "=== tests_failed ==="
+          echo "${{ steps.parse.outputs.tests_failed }}"
+          echo "=== tests_skipped ==="
+          echo "${{ steps.parse.outputs.tests_skipped }}"
+          echo "=== passed_tests ==="
+          echo "${{ steps.parse.outputs.passed_tests }}"
+          echo "=== failed_tests ==="
+          echo "${{ steps.parse.outputs.failed_tests }}"
 
       - name: Print test summary
         if: always()
@@ -198,6 +236,7 @@ jobs:
       tests_passed:  ${{ needs.build-and-test.outputs.tests_passed }}
       tests_failed:  ${{ needs.build-and-test.outputs.tests_failed }}
       tests_skipped: ${{ needs.build-and-test.outputs.tests_skipped }}
+      passed_tests:  ${{ needs.build-and-test.outputs.passed_tests }}
       failed_tests:  ${{ needs.build-and-test.outputs.failed_tests }}
 
   notify-email:
@@ -211,4 +250,5 @@ jobs:
       tests_passed:  ${{ needs.build-and-test.outputs.tests_passed }}
       tests_failed:  ${{ needs.build-and-test.outputs.tests_failed }}
       tests_skipped: ${{ needs.build-and-test.outputs.tests_skipped }}
+      passed_tests:  ${{ needs.build-and-test.outputs.passed_tests }}
       failed_tests:  ${{ needs.build-and-test.outputs.failed_tests }}

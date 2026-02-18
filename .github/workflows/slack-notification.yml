@@ -41,6 +41,8 @@ jobs:
       - name: Build and Send Slack Notification
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          PASSED_TESTS: ${{ inputs.passed_tests }}
+          FAILED_TESTS: ${{ inputs.failed_tests }}
         run: |
           STATUS="${{ inputs.status }}"
           if [ "$STATUS" = "success" ]; then
@@ -53,9 +55,14 @@ jobs:
             STATUS_LABEL="FAILED"
           fi
 
-          PASSED_TESTS="${{ inputs.passed_tests }}"
-          FAILED_TESTS="${{ inputs.failed_tests }}"
           TESTS_FAILED="${{ inputs.tests_failed }}"
+
+          echo "=== INPUT passed_tests ==="
+          echo "$PASSED_TESTS"
+          echo "=== INPUT failed_tests ==="
+          echo "$FAILED_TESTS"
+          echo "=== INPUT tests_failed ==="
+          echo "$TESTS_FAILED"
 
           # Build base fields
           BASE_FIELDS=$(jq -n \
@@ -65,11 +72,11 @@ jobs:
             --arg commit   "${{ github.sha }}" \
             --arg results  "Total: *${{ inputs.tests_total }}*  |  ✅ Passed: *${{ inputs.tests_passed }}*  |  ❌ Failed: *${{ inputs.tests_failed }}*  |  ⏭ Skipped: *${{ inputs.tests_skipped }}*" \
             '[
-              {"title": "Repository",    "value": $repo,    "short": true},
-              {"title": "Branch",        "value": $branch,  "short": true},
-              {"title": "Run #",         "value": $run,     "short": true},
-              {"title": "Commit",        "value": $commit,  "short": true},
-              {"title": "Test Results",  "value": $results, "short": false}
+              {"title": "Repository",   "value": $repo,    "short": true},
+              {"title": "Branch",       "value": $branch,  "short": true},
+              {"title": "Run #",        "value": $run,     "short": true},
+              {"title": "Commit",       "value": $commit,  "short": true},
+              {"title": "Test Results", "value": $results, "short": false}
             ]')
 
           FIELDS="$BASE_FIELDS"
@@ -77,7 +84,7 @@ jobs:
           # Add passed tests field if any
           if [ -n "$PASSED_TESTS" ]; then
             PASSED_FIELD=$(jq -n \
-              --arg val "$(printf '```%s```' "$PASSED_TESTS")" \
+              --arg val "$(printf '```\n%s\n```' "$PASSED_TESTS")" \
               '{"title": "✅ Passed Tests", "value": $val, "short": false}')
             FIELDS=$(echo "$FIELDS" | jq --argjson f "$PASSED_FIELD" '. + [$f]')
           fi
@@ -85,16 +92,16 @@ jobs:
           # Add failed tests field if any
           if [ "$TESTS_FAILED" != "0" ] && [ "$TESTS_FAILED" != "N/A" ] && [ -n "$FAILED_TESTS" ]; then
             FAILED_FIELD=$(jq -n \
-              --arg val "$(printf '```%s```' "$FAILED_TESTS")" \
+              --arg val "$(printf '```\n%s\n```' "$FAILED_TESTS")" \
               '{"title": "❌ Failed Tests", "value": $val, "short": false}')
             FIELDS=$(echo "$FIELDS" | jq --argjson f "$FAILED_FIELD" '. + [$f]')
           fi
 
           # Build final payload
           PAYLOAD=$(jq -n \
-            --arg text        "${STATUS_ICON} CI Test Run ${STATUS_LABEL} — ${{ github.repository }} (#${{ github.run_number }})" \
-            --arg color       "$STATUS_COLOR" \
-            --argjson fields  "$FIELDS" \
+            --arg text       "${STATUS_ICON} CI Test Run ${STATUS_LABEL} — ${{ github.repository }} (#${{ github.run_number }})" \
+            --arg color      "$STATUS_COLOR" \
+            --argjson fields "$FIELDS" \
             '{
               "text": $text,
               "attachments": [
