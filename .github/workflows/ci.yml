@@ -81,7 +81,7 @@ jobs:
             FAILED=$((FAILED + f + e))
             SKIPPED=$((SKIPPED + s))
 
-            # Extract failure details: test name + message + file:line
+            # Extract failure details: display name + full assertion message + file:line
             python3 - "$xml" <<'PYEOF'
           import sys, xml.etree.ElementTree as ET
 
@@ -90,21 +90,37 @@ jobs:
 
           for tc in root.findall('testcase'):
               classname = tc.get('classname', '')
-              name      = tc.get('name', '')
+              name      = tc.get('name', '')   # JUnit 5: this IS the @DisplayName value
               for child in tc:
                   if child.tag in ('failure', 'error'):
-                      msg  = (child.get('message') or '').split('\n')[0][:200]
-                      body = (child.text or '')
-                      # grab first "at ..." line that references our source
-                      loc  = ''
-                      for line in body.splitlines():
-                          line = line.strip()
-                          if line.startswith('at org.example') and '.java:' in line:
-                              loc = line.replace('at ', '')
+                      raw_msg = (child.get('message') or '')
+                      body    = (child.text or '')
+
+                      # First line of message (e.g. "expected: <X> but was: <Y>")
+                      first_line = raw_msg.split('\n')[0][:400]
+
+                      # Look for the expected/actual detail block inside the body
+                      detail_lines = []
+                      for ln in body.splitlines():
+                          stripped = ln.strip()
+                          if stripped.startswith('expected:') or stripped.startswith('but was:') or stripped.startswith('==>') or stripped.startswith('org.opentest4j'):
+                              detail_lines.append('    ' + stripped[:300])
+                          if len(detail_lines) >= 4:
                               break
+
+                      # Grab first "at ..." line that references our source
+                      loc = ''
+                      for ln in body.splitlines():
+                          stripped = ln.strip()
+                          if stripped.startswith('at org.example') and '.java:' in stripped:
+                              loc = stripped.replace('at ', '')
+                              break
+
                       short_class = classname.split('.')[-1]
-                      print(f"  • {short_class}#{name}")
-                      print(f"    ↳ {msg}")
+                      print(f"  • {short_class} — {name}")
+                      print(f"    ↳ {first_line}")
+                      for dl in detail_lines:
+                          print(dl)
                       if loc:
                           print(f"    @ {loc}")
           PYEOF
@@ -112,7 +128,7 @@ jobs:
 
           PASSED=$((TOTAL - FAILED - SKIPPED))
 
-          # Collect failed test details into a single-line string for outputs
+          # Collect failed test details for Slack / email outputs
           FAILED_TESTS_RAW=""
           for xml in target/surefire-reports/TEST-*.xml; do
             [ -f "$xml" ] || continue
@@ -124,23 +140,40 @@ jobs:
           parts = []
           for tc in root.findall('testcase'):
               classname = tc.get('classname', '')
-              name      = tc.get('name', '')
+              name      = tc.get('name', '')   # JUnit 5: this IS the @DisplayName value
               for child in tc:
                   if child.tag in ('failure', 'error'):
-                      msg  = (child.get('message') or '').split('\n')[0][:150]
-                      body = (child.text or '')
-                      loc  = ''
-                      for line in body.splitlines():
-                          line = line.strip()
-                          if line.startswith('at org.example') and '.java:' in line:
-                              loc = line.replace('at ', '')
+                      raw_msg = (child.get('message') or '')
+                      body    = (child.text or '')
+
+                      # First line of the failure message
+                      first_line = raw_msg.split('\n')[0][:350]
+
+                      # Collect expected/actual detail lines from the stack body
+                      detail_lines = []
+                      for ln in body.splitlines():
+                          stripped = ln.strip()
+                          if stripped.startswith('expected:') or stripped.startswith('but was:') or stripped.startswith('==>') or stripped.startswith('org.opentest4j'):
+                              detail_lines.append('  ' + stripped[:300])
+                          if len(detail_lines) >= 4:
                               break
+
+                      # First stack frame from our own source
+                      loc = ''
+                      for ln in body.splitlines():
+                          stripped = ln.strip()
+                          if stripped.startswith('at org.example') and '.java:' in stripped:
+                              loc = stripped.replace('at ', '')
+                              break
+
                       short_class = classname.split('.')[-1]
-                      entry = f"• {short_class}#{name} | {msg}"
+                      lines = [f"• {short_class} — {name}"]
+                      lines.append(f"  ↳ {first_line}")
+                      lines.extend(detail_lines)
                       if loc:
-                          entry += f" @ {loc}"
-                      parts.append(entry)
-          print('\n'.join(parts))
+                          lines.append(f"  @ {loc}")
+                      parts.append('\n'.join(lines))
+          print('\n\n'.join(parts))
           PYEOF
           )
           done
