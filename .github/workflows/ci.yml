@@ -41,6 +41,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-
 
+      - name: Create target directory
+        run: mkdir -p target
+
       - name: Run Maven tests
         id: maven-test
         env:
@@ -67,7 +70,6 @@ jobs:
         if: always()
         run: |
           TOTAL=0; PASSED=0; FAILED=0; SKIPPED=0
-          FAILED_LIST=""
 
           for xml in target/surefire-reports/TEST-*.xml; do
             [ -f "$xml" ] || continue
@@ -80,65 +82,11 @@ jobs:
             TOTAL=$((TOTAL + t))
             FAILED=$((FAILED + f + e))
             SKIPPED=$((SKIPPED + s))
-
-            # Extract failure details: display name + full assertion message + file:line
-            python3 - "$xml" <<'PYEOF'
-          import sys, xml.etree.ElementTree as ET
-
-          tree = ET.parse(sys.argv[1])
-          root = tree.getroot()
-
-          for tc in root.findall('testcase'):
-              classname = tc.get('classname', '')
-              name      = tc.get('name', '')   # JUnit 5 surefire: this IS the @DisplayName value
-              for child in tc:
-                  if child.tag in ('failure', 'error'):
-                      # Full message attribute — JUnit 5 puts expected/actual here, newline-separated
-                      full_msg = (child.get('message') or '').strip()
-                      msg_lines = full_msg.splitlines()
-                      summary = msg_lines[0] if msg_lines else '(no message)'
-
-                      # Build the detailed message block
-                      short_class = classname.split('.')[-1]
-                      ans = [f'[FAIL] {short_class} :: {name}']
-                      ans.append(f'       Reason  : {summary}')
-
-                      # If the summary contains the mismatch, break it down for clarity as requested
-                      if 'expected:' in summary and 'but was:' in summary:
-                          parts_summary = summary.split('but was:')
-                          exp = parts_summary[0].strip()
-                          act = 'but was: ' + parts_summary[1].strip()
-                          ans.append(f'       {exp}')
-                          ans.append(f'       {act}')
-
-                      # Add any further detail lines from the XML message
-                      for ml in msg_lines[1:]:
-                          ml = ml.strip()
-                          if ml and not any(ml in s for s in ans): # avoid duplicates if summary was split
-                              ans.append('       ' + ml[:300])
-                          if len(ans) >= 10: break
-
-                      # First stack frame from our own source (in the body/text)
-                      body = (child.text or '')
-                      loc = ''
-                      for ln in body.splitlines():
-                          stripped = ln.strip()
-                          if stripped.startswith('at org.example') and '.java:' in stripped:
-                              loc = stripped[len('at '):]
-                              break
-
-                      if loc:
-                          ans.append(f'       Location: {loc}')
-                      
-                      for line in ans:
-                          print(line)
-                      print('')
-          PYEOF
           done
 
           PASSED=$((TOTAL - FAILED - SKIPPED))
 
-          # Collect failed test details for Slack / email outputs
+          # Collect failed test details
           FAILED_TESTS_RAW=""
           for xml in target/surefire-reports/TEST-*.xml; do
             [ -f "$xml" ] || continue
@@ -150,12 +98,12 @@ jobs:
           parts = []
           for tc in root.findall('testcase'):
               classname = tc.get('classname', '')
-              name      = tc.get('name', '')   # JUnit 5 surefire: this IS the @DisplayName value
+              name      = tc.get('name', '')
               for child in tc:
                   if child.tag in ('failure', 'error'):
-                      full_msg = (child.get('message') or '').strip()
+                      full_msg  = (child.get('message') or '').strip()
                       msg_lines = full_msg.splitlines()
-                      summary = msg_lines[0] if msg_lines else '(no message)'
+                      summary   = msg_lines[0] if msg_lines else '(no message)'
 
                       short_class = classname.split('.')[-1]
                       ans = [f'[FAIL] {short_class} :: {name}']
@@ -175,7 +123,7 @@ jobs:
                           if len(ans) >= 10: break
 
                       body = (child.text or '')
-                      loc = ''
+                      loc  = ''
                       for ln in body.splitlines():
                           stripped = ln.strip()
                           if stripped.startswith('at org.example') and '.java:' in stripped:
@@ -195,7 +143,6 @@ jobs:
           echo "tests_failed=$FAILED"   >> "$GITHUB_OUTPUT"
           echo "tests_skipped=$SKIPPED" >> "$GITHUB_OUTPUT"
 
-          # Multiline output — use delimiter
           {
             echo "failed_tests<<EOF_FAILED"
             echo "$FAILED_TESTS_RAW"
