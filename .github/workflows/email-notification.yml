@@ -44,135 +44,25 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
-      - name: Format Failed Tests Output
-        if: inputs.status == 'failure'
-        id: format_failures
-        run: |
-          python3 - <<'EOF'
-          import xml.etree.ElementTree as ET
-          import glob, os
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-          lines = []
-          for report in glob.glob("**/TEST-*.xml", recursive=True):
-              tree = ET.parse(report)
-              root = tree.getroot()
-              classname = root.attrib.get("name", "UnknownTest")
+      - name: Install Jinja2
+        run: pip install jinja2 --break-system-packages
 
-              for tc in root.findall("testcase"):
-                  failure = tc.find("failure")
-                  error   = tc.find("error")
-                  node    = failure if failure is not None else error
-                  if node is None:
-                      continue
-
-                  test_name = tc.attrib.get("name", "unknownTest")
-                  raw       = (node.text or "").strip()
-
-                  expected, but_was, location, full_reason = "N/A", "N/A", "N/A", "N/A"
-
-                  raw_lines = raw.splitlines()
-                  for raw_line in raw_lines:
-                      l = raw_line.strip()
-                      if l.startswith("expected:"):
-                          expected = l.replace("expected:", "").strip().strip("<>")
-                      elif l.startswith("but was:"):
-                          but_was = l.replace("but was:", "").strip().strip("<>")
-                      elif "(" in l and ".java:" in l and location == "N/A":
-                          location = l
-
-                  if raw_lines:
-                      full_reason = raw_lines[0].strip()
-
-                  lines.append(
-                      f"[FAIL] {classname} :: {test_name}\n"
-                      f"       Reason  : {full_reason}\n"
-                      f"       expected: <{expected}>\n"
-                      f"       but was : <{but_was}>\n"
-                      f"       Location: {location}"
-                  )
-
-          output = "\n\n".join(lines) if lines else "No failure details available"
-          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
-              fh.write(f"failed_tests<<FAILED_TESTS_EOF\n{output}\nFAILED_TESTS_EOF\n")
-          EOF
-
-      - name: Build email body
-        id: build-body
-        run: |
-          STATUS="${{ inputs.status }}"
-          if [ "$STATUS" = "success" ]; then
-            STATUS_ICON="✅"
-            STATUS_COLOR="#28a745"
-            STATUS_LABEL="PASSED"
-          else
-            STATUS_ICON="❌"
-            STATUS_COLOR="#dc3545"
-            STATUS_LABEL="FAILED"
-          fi
-
-          FAILED_SECTION=""
-          if [ "${{ inputs.tests_failed }}" != "0" ] && [ "${{ inputs.tests_failed }}" != "N/A" ]; then
-            FAILED_CONTENT="${{ steps.format_failures.outputs.failed_tests }}"
-            FAILED_SECTION="
-              <h3 style='color:#dc3545;margin-top:24px;'>❌ Failed Tests</h3>
-              <pre style='background:#fff5f5;border:1px solid #f5c6cb;border-radius:6px;padding:14px;font-size:13px;font-family:monospace;white-space:pre-wrap;word-break:break-word;line-height:1.6;'>${FAILED_CONTENT}</pre>
-            "
-          fi
-
-          HTML_BODY="<!DOCTYPE html>
-          <html>
-          <head><meta charset='UTF-8'></head>
-          <body style='font-family:Arial,sans-serif;background:#f4f4f4;padding:20px;'>
-            <div style='max-width:640px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.1);'>
-              <div style='background:${STATUS_COLOR};padding:20px 24px;'>
-                <h1 style='color:#fff;margin:0;font-size:22px;'>${STATUS_ICON} CI Test Run ${STATUS_LABEL}</h1>
-              </div>
-              <div style='padding:24px;'>
-                <table style='width:100%;border-collapse:collapse;font-size:14px;'>
-                  <tr><td style='padding:8px 0;color:#555;width:140px;'>Repository</td><td style='padding:8px 0;font-weight:bold;'>${{ github.repository }}</td></tr>
-                  <tr><td style='padding:8px 0;color:#555;'>Branch</td><td style='padding:8px 0;font-weight:bold;'>${{ github.ref_name }}</td></tr>
-                  <tr><td style='padding:8px 0;color:#555;'>Run #</td><td style='padding:8px 0;font-weight:bold;'>${{ github.run_number }}</td></tr>
-                  <tr><td style='padding:8px 0;color:#555;'>Commit</td><td style='padding:8px 0;font-family:monospace;font-size:12px;'>${{ github.sha }}</td></tr>
-                </table>
-
-                <h3 style='margin-top:24px;margin-bottom:12px;color:#333;'>Test Results</h3>
-                <table style='width:100%;border-collapse:collapse;font-size:14px;text-align:center;'>
-                  <thead>
-                    <tr style='background:#f8f9fa;'>
-                      <th style='padding:10px;border:1px solid #dee2e6;'>Total</th>
-                      <th style='padding:10px;border:1px solid #dee2e6;color:#28a745;'>✅ Passed</th>
-                      <th style='padding:10px;border:1px solid #dee2e6;color:#dc3545;'>❌ Failed</th>
-                      <th style='padding:10px;border:1px solid #dee2e6;color:#6c757d;'>⏭ Skipped</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td style='padding:10px;border:1px solid #dee2e6;font-weight:bold;font-size:18px;'>${{ inputs.tests_total }}</td>
-                      <td style='padding:10px;border:1px solid #dee2e6;font-weight:bold;font-size:18px;color:#28a745;'>${{ inputs.tests_passed }}</td>
-                      <td style='padding:10px;border:1px solid #dee2e6;font-weight:bold;font-size:18px;color:#dc3545;'>${{ inputs.tests_failed }}</td>
-                      <td style='padding:10px;border:1px solid #dee2e6;font-weight:bold;font-size:18px;color:#6c757d;'>${{ inputs.tests_skipped }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-
-                ${FAILED_SECTION}
-
-                <div style='margin-top:28px;text-align:center;'>
-                  <a href='${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'
-                     style='background:${STATUS_COLOR};color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:14px;display:inline-block;'>
-                    View Full Logs in GitHub Actions
-                  </a>
-                </div>
-              </div>
-              <div style='background:#f8f9fa;padding:12px 24px;font-size:12px;color:#6c757d;text-align:center;'>
-                This notification was sent automatically by GitHub Actions.
-              </div>
-            </div>
-          </body>
-          </html>"
-
-          echo "$HTML_BODY" > /tmp/email_body.html
-          echo "body_file=/tmp/email_body.html" >> "$GITHUB_OUTPUT"
+      - name: Render Email Template
+        env:
+          STATUS:        ${{ inputs.status }}
+          TESTS_TOTAL:   ${{ inputs.tests_total }}
+          TESTS_PASSED:  ${{ inputs.tests_passed }}
+          TESTS_FAILED:  ${{ inputs.tests_failed }}
+          TESTS_SKIPPED: ${{ inputs.tests_skipped }}
+          REPOSITORY:    ${{ github.repository }}
+          BRANCH:        ${{ github.ref_name }}
+          RUN_NUMBER:    ${{ github.run_number }}
+          COMMIT:        ${{ github.sha }}
+          RUN_URL:       ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: python3 .github/scripts/render_email.py
 
       - name: Send Email Notification
         uses: dawidd6/action-send-mail@v3
