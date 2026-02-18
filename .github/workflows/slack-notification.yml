@@ -34,31 +34,154 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Format Failed Tests Output
+        if: inputs.status == 'failure'
+        id: format_failures
+        run: |
+          python3 - <<'EOF'
+          import xml.etree.ElementTree as ET
+          import glob, os
 
-      - name: Install Jinja2
-        run: pip install jinja2 --break-system-packages
+          lines = []
+          for report in glob.glob("**/TEST-*.xml", recursive=True):
+              tree = ET.parse(report)
+              root = tree.getroot()
+              classname = root.attrib.get("name", "UnknownTest")
 
-      - name: Render Slack Payload
-        env:
-          STATUS:        ${{ inputs.status }}
-          TESTS_TOTAL:   ${{ inputs.tests_total }}
-          TESTS_PASSED:  ${{ inputs.tests_passed }}
-          TESTS_FAILED:  ${{ inputs.tests_failed }}
-          TESTS_SKIPPED: ${{ inputs.tests_skipped }}
-          REPOSITORY:    ${{ github.repository }}
-          BRANCH:        ${{ github.ref_name }}
-          RUN_NUMBER:    ${{ github.run_number }}
-          COMMIT:        ${{ github.sha }}
-          RUN_URL:       ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: python3 .github/scripts/render_slack.py
+              for tc in root.findall("testcase"):
+                  failure = tc.find("failure")
+                  error   = tc.find("error")
+                  node    = failure if failure is not None else error
+                  if node is None:
+                      continue
 
-      - name: Send Slack Notification
+                  test_name = tc.attrib.get("name", "unknownTest")
+                  raw       = (node.text or "").strip()
+
+                  expected, but_was, location = "N/A", "N/A", "N/A"
+                  for raw_line in raw.splitlines():
+                      l = raw_line.strip()
+                      if l.startswith("expected:"):
+                          expected = l.replace("expected:", "").strip().strip("<>")
+                      elif l.startswith("but was:"):
+                          but_was  = l.replace("but was:", "").strip().strip("<>")
+                      elif "(" in l and ".java:" in l:
+                          location = l
+
+                  reason = f"expected: <{expected}> but was: <{but_was}>"
+
+                  lines.append(
+                      f"[FAIL] {classname} :: {test_name}\n"
+                      f"       Reason  : {reason}\n"
+                      f"       expected: <{expected}>\n"
+                      f"       but was: <{but_was}>\n"
+                      f"       Location: {location}"
+                  )
+
+          output = "\n\n".join(lines) if lines else "No failure details available"
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+              fh.write(f"failed_tests<<FAILED_TESTS_EOF\n{output}\nFAILED_TESTS_EOF\n")
+          EOF
+
+      - name: Slack Notification - Success
+        if: inputs.status == 'success'
+        uses: slackapi/slack-github-action@v1.24.0
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        run: |
-          curl -X POST \
-               -H "Content-Type: application/json" \
-               --data @/tmp/slack_payload.json \
-               "$SLACK_WEBHOOK_URL"
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        with:
+          payload: |
+            {
+              "text": "✅ CI Test Run PASSED — ${{ github.repository }} (#${{ github.run_number }})",
+              "attachments": [
+                {
+                  "color": "#28a745",
+                  "fields": [
+                    {
+                      "title": "Repository",
+                      "value": "${{ github.repository }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Branch",
+                      "value": "${{ github.ref_name }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Run #",
+                      "value": "${{ github.run_number }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Commit",
+                      "value": "${{ github.sha }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Test Results",
+                      "value": "Total: *${{ inputs.tests_total }}*  |  ✅ Passed: *${{ inputs.tests_passed }}*  |  ❌ Failed: *${{ inputs.tests_failed }}*  |  ⏭ Skipped: *${{ inputs.tests_skipped }}*",
+                      "short": false
+                    },
+                    {
+                      "title": "View Full Logs in GitHub Actions",
+                      "value": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Open in GitHub Actions>",
+                      "short": false
+                    }
+                  ]
+                }
+              ]
+            }
+
+      - name: Slack Notification - Failure
+        if: inputs.status == 'failure'
+        uses: slackapi/slack-github-action@v1.24.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        with:
+          payload: |
+            {
+              "text": "❌ CI Test Run FAILED — ${{ github.repository }} (#${{ github.run_number }})",
+              "attachments": [
+                {
+                  "color": "#dc3545",
+                  "fields": [
+                    {
+                      "title": "Repository",
+                      "value": "${{ github.repository }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Branch",
+                      "value": "${{ github.ref_name }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Run #",
+                      "value": "${{ github.run_number }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Commit",
+                      "value": "${{ github.sha }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Test Results",
+                      "value": "Total: *${{ inputs.tests_total }}*  |  ✅ Passed: *${{ inputs.tests_passed }}*  |  ❌ Failed: *${{ inputs.tests_failed }}*  |  ⏭ Skipped: *${{ inputs.tests_skipped }}*",
+                      "short": false
+                    },
+                    {
+                      "title": "❌ Failed Tests",
+                      "value": "```${{ steps.format_failures.outputs.failed_tests }}```",
+                      "short": false
+                    },
+                    {
+                      "title": "View Full Logs in GitHub Actions",
+                      "value": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Open in GitHub Actions>",
+                      "short": false
+                    }
+                  ]
+                }
+              ]
+            }
