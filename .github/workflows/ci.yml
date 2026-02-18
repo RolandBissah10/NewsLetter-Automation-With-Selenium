@@ -96,16 +96,27 @@ jobs:
                         # Full message attribute — JUnit 5 puts expected/actual here, newline-separated
                         full_msg = (child.get('message') or '').strip()
                         msg_lines = full_msg.splitlines()
-                        first_line = msg_lines[0][:400] if msg_lines else '(no message)'
+                        summary = msg_lines[0] if msg_lines else '(no message)'
 
-                        # Capture all reason/assertion detail lines
-                        detail_lines = []
+                        # Build the detailed message block
+                        short_class = classname.split('.')[-1]
+                        ans = [f'[FAIL] {short_class} :: {name}']
+                        ans.append(f'       Reason  : {summary}')
+
+                        # If the summary contains the mismatch, break it down for clarity as requested
+                        if 'expected:' in summary and 'but was:' in summary:
+                            parts_summary = summary.split('but was:')
+                            exp = parts_summary[0].strip()
+                            act = 'but was: ' + parts_summary[1].strip()
+                            ans.append(f'       {exp}')
+                            ans.append(f'       {act}')
+
+                        # Add any further detail lines from the XML message
                         for ml in msg_lines[1:]:
                             ml = ml.strip()
-                            if ml:
-                                detail_lines.append('    ' + ml[:300])
-                            if len(detail_lines) >= 6:
-                                break
+                            if ml and not any(ml in s for s in ans): # avoid duplicates if summary was split
+                                ans.append('       ' + ml[:300])
+                            if len(ans) >= 10: break
 
                         # First stack frame from our own source (in the body/text)
                         body = (child.text or '')
@@ -116,13 +127,11 @@ jobs:
                                 loc = stripped[len('at '):]
                                 break
 
-                        short_class = classname.split('.')[-1]
-                        print(f'[FAIL] {short_class} :: {name}')
-                        print(f'       Reason : {first_line}')
-                        for dl in detail_lines:
-                            print(dl)
                         if loc:
-                            print(f'       Location: {loc}')
+                            ans.append(f'       Location: {loc}')
+                        
+                        for line in ans:
+                            print(line)
                         print('')
             PYEOF
           done
@@ -133,6 +142,7 @@ jobs:
           FAILED_TESTS_RAW=""
           for xml in target/surefire-reports/TEST-*.xml; do
             [ -f "$xml" ] || continue
+            # Avoid duplicate output by checking if file was already processed if multiple surefire runs occur
             FAILED_TESTS_RAW+=$(python3 - "$xml" <<'PYEOF'
             import sys, xml.etree.ElementTree as ET
 
@@ -144,21 +154,27 @@ jobs:
                 name      = tc.get('name', '')   # JUnit 5 surefire: this IS the @DisplayName value
                 for child in tc:
                     if child.tag in ('failure', 'error'):
-                        # Full message attribute — JUnit 5 puts expected/actual here, newline-separated
                         full_msg = (child.get('message') or '').strip()
                         msg_lines = full_msg.splitlines()
-                        first_line = msg_lines[0][:350] if msg_lines else '(no message)'
+                        summary = msg_lines[0] if msg_lines else '(no message)'
 
-                        # Capture all reason/assertion detail lines
-                        detail_lines = []
+                        short_class = classname.split('.')[-1]
+                        ans = [f'[FAIL] {short_class} :: {name}']
+                        ans.append(f'       Reason  : {summary}')
+
+                        if 'expected:' in summary and 'but was:' in summary:
+                            parts_summary = summary.split('but was:')
+                            exp = parts_summary[0].strip()
+                            act = 'but was: ' + parts_summary[1].strip()
+                            ans.append(f'       {exp}')
+                            ans.append(f'       {act}')
+
                         for ml in msg_lines[1:]:
                             ml = ml.strip()
-                            if ml:
-                                detail_lines.append('  ' + ml[:300])
-                            if len(detail_lines) >= 6:
-                                break
+                            if ml and not any(ml in s for s in ans):
+                                ans.append('       ' + ml[:300])
+                            if len(ans) >= 10: break
 
-                        # First stack frame from our own source
                         body = (child.text or '')
                         loc = ''
                         for ln in body.splitlines():
@@ -167,13 +183,9 @@ jobs:
                                 loc = stripped[len('at '):]
                                 break
 
-                        short_class = classname.split('.')[-1]
-                        entry_lines = [f'[FAIL] {short_class} :: {name}',
-                                       f'       Reason  : {first_line}']
-                        entry_lines.extend(detail_lines)
                         if loc:
-                            entry_lines.append(f'       Location: {loc}')
-                        parts.append('\n'.join(entry_lines))
+                            ans.append(f'       Location: {loc}')
+                        parts.append('\n'.join(ans))
             print('\n\n'.join(parts))
             PYEOF
             )
