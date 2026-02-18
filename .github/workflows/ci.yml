@@ -2,9 +2,9 @@ name: CI - Selenium tests
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, develop ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main, develop ]
   workflow_dispatch:
     inputs:
       simulate:
@@ -15,6 +15,13 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+
+    outputs:
+      tests_total:   ${{ steps.parse.outputs.tests_total }}
+      tests_passed:  ${{ steps.parse.outputs.tests_passed }}
+      tests_failed:  ${{ steps.parse.outputs.tests_failed }}
+      tests_skipped: ${{ steps.parse.outputs.tests_skipped }}
+      failed_tests:  ${{ steps.parse.outputs.failed_tests }}
 
     steps:
       - name: Checkout
@@ -35,11 +42,138 @@ jobs:
             ${{ runner.os }}-maven-
 
       - name: Run Maven tests
+        id: maven-test
         env:
           CI: true
         run: |
           set -o pipefail
-          mvn -B -Dheadless=true test
+          echo "=========================================="
+          echo "  Starting Selenium Test Execution"
+          echo "  Repository : ${{ github.repository }}"
+          echo "  Branch     : ${{ github.ref_name }}"
+          echo "  Run #      : ${{ github.run_number }}"
+          echo "  Commit     : ${{ github.sha }}"
+          echo "=========================================="
+          mvn -B -Dheadless=true \
+              -Dsurefire.useFile=false \
+              -Dsurefire.printSummary=true \
+              test 2>&1 | tee target/test-execution.log
+          echo "=========================================="
+          echo "  Maven test phase complete"
+          echo "=========================================="
+
+      - name: Parse surefire test results
+        id: parse
+        if: always()
+        run: |
+          TOTAL=0; PASSED=0; FAILED=0; SKIPPED=0
+          FAILED_LIST=""
+
+          for xml in target/surefire-reports/TEST-*.xml; do
+            [ -f "$xml" ] || continue
+
+            t=$(grep -oP 'tests="\K[0-9]+' "$xml" | head -1 || echo 0)
+            f=$(grep -oP 'failures="\K[0-9]+' "$xml" | head -1 || echo 0)
+            e=$(grep -oP 'errors="\K[0-9]+' "$xml" | head -1 || echo 0)
+            s=$(grep -oP 'skipped="\K[0-9]+' "$xml" | head -1 || echo 0)
+
+            TOTAL=$((TOTAL + t))
+            FAILED=$((FAILED + f + e))
+            SKIPPED=$((SKIPPED + s))
+
+            # Extract failure details: test name + message + file:line
+            python3 - "$xml" <<'PYEOF'
+          import sys, xml.etree.ElementTree as ET
+
+          tree = ET.parse(sys.argv[1])
+          root = tree.getroot()
+
+          for tc in root.findall('testcase'):
+              classname = tc.get('classname', '')
+              name      = tc.get('name', '')
+              for child in tc:
+                  if child.tag in ('failure', 'error'):
+                      msg  = (child.get('message') or '').split('\n')[0][:200]
+                      body = (child.text or '')
+                      # grab first "at ..." line that references our source
+                      loc  = ''
+                      for line in body.splitlines():
+                          line = line.strip()
+                          if line.startswith('at org.example') and '.java:' in line:
+                              loc = line.replace('at ', '')
+                              break
+                      short_class = classname.split('.')[-1]
+                      print(f"  • {short_class}#{name}")
+                      print(f"    ↳ {msg}")
+                      if loc:
+                          print(f"    @ {loc}")
+          PYEOF
+          done
+
+          PASSED=$((TOTAL - FAILED - SKIPPED))
+
+          # Collect failed test details into a single-line string for outputs
+          FAILED_TESTS_RAW=""
+          for xml in target/surefire-reports/TEST-*.xml; do
+            [ -f "$xml" ] || continue
+            FAILED_TESTS_RAW+=$(python3 - "$xml" <<'PYEOF'
+          import sys, xml.etree.ElementTree as ET
+
+          tree = ET.parse(sys.argv[1])
+          root = tree.getroot()
+          parts = []
+          for tc in root.findall('testcase'):
+              classname = tc.get('classname', '')
+              name      = tc.get('name', '')
+              for child in tc:
+                  if child.tag in ('failure', 'error'):
+                      msg  = (child.get('message') or '').split('\n')[0][:150]
+                      body = (child.text or '')
+                      loc  = ''
+                      for line in body.splitlines():
+                          line = line.strip()
+                          if line.startswith('at org.example') and '.java:' in line:
+                              loc = line.replace('at ', '')
+                              break
+                      short_class = classname.split('.')[-1]
+                      entry = f"• {short_class}#{name} | {msg}"
+                      if loc:
+                          entry += f" @ {loc}"
+                      parts.append(entry)
+          print('\n'.join(parts))
+          PYEOF
+          )
+          done
+
+          echo "tests_total=$TOTAL"     >> "$GITHUB_OUTPUT"
+          echo "tests_passed=$PASSED"   >> "$GITHUB_OUTPUT"
+          echo "tests_failed=$FAILED"   >> "$GITHUB_OUTPUT"
+          echo "tests_skipped=$SKIPPED" >> "$GITHUB_OUTPUT"
+
+          # Multiline output — use delimiter
+          {
+            echo "failed_tests<<EOF_FAILED"
+            echo "$FAILED_TESTS_RAW"
+            echo "EOF_FAILED"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Print test summary
+        if: always()
+        run: |
+          echo ""
+          echo "╔══════════════════════════════════════════╗"
+          echo "║           TEST EXECUTION SUMMARY          ║"
+          echo "╠══════════════════════════════════════════╣"
+          echo "║  Total   : ${{ steps.parse.outputs.tests_total }}"
+          echo "║  Passed  : ${{ steps.parse.outputs.tests_passed }}"
+          echo "║  Failed  : ${{ steps.parse.outputs.tests_failed }}"
+          echo "║  Skipped : ${{ steps.parse.outputs.tests_skipped }}"
+          echo "╚══════════════════════════════════════════╝"
+          if [ "${{ steps.parse.outputs.tests_failed }}" != "0" ]; then
+            echo ""
+            echo "FAILED TESTS:"
+            echo "${{ steps.parse.outputs.failed_tests }}"
+          fi
 
       - name: Upload surefire reports
         if: always()
@@ -47,6 +181,13 @@ jobs:
         with:
           name: surefire-reports
           path: target/surefire-reports
+
+      - name: Upload test execution log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-execution-log
+          path: target/test-execution.log
 
       - name: Simulate failure (manual only)
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.simulate == 'true' }}
@@ -60,7 +201,12 @@ jobs:
     uses: ./.github/workflows/slack-notification.yml
     secrets: inherit
     with:
-      status: ${{ needs.build-and-test.result }}
+      status:        ${{ needs.build-and-test.result }}
+      tests_total:   ${{ needs.build-and-test.outputs.tests_total }}
+      tests_passed:  ${{ needs.build-and-test.outputs.tests_passed }}
+      tests_failed:  ${{ needs.build-and-test.outputs.tests_failed }}
+      tests_skipped: ${{ needs.build-and-test.outputs.tests_skipped }}
+      failed_tests:  ${{ needs.build-and-test.outputs.failed_tests }}
 
   notify-email:
     needs: build-and-test
@@ -68,4 +214,9 @@ jobs:
     uses: ./.github/workflows/email-notification.yml
     secrets: inherit
     with:
-      status: ${{ needs.build-and-test.result }}
+      status:        ${{ needs.build-and-test.result }}
+      tests_total:   ${{ needs.build-and-test.outputs.tests_total }}
+      tests_passed:  ${{ needs.build-and-test.outputs.tests_passed }}
+      tests_failed:  ${{ needs.build-and-test.outputs.tests_failed }}
+      tests_skipped: ${{ needs.build-and-test.outputs.tests_skipped }}
+      failed_tests:  ${{ needs.build-and-test.outputs.failed_tests }}

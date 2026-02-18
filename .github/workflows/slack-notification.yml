@@ -6,6 +6,26 @@ on:
       status:
         required: true
         type: string
+      tests_total:
+        required: false
+        type: string
+        default: 'N/A'
+      tests_passed:
+        required: false
+        type: string
+        default: 'N/A'
+      tests_failed:
+        required: false
+        type: string
+        default: 'N/A'
+      tests_skipped:
+        required: false
+        type: string
+        default: 'N/A'
+      failed_tests:
+        required: false
+        type: string
+        default: ''
     secrets:
       SLACK_WEBHOOK_URL:
         required: true
@@ -23,7 +43,7 @@ jobs:
         with:
           payload: |
             {
-              "text": "✅ Tests passed for ${{ github.repository }} (#${{ github.run_number }})",
+              "text": "✅ All tests passed — ${{ github.repository }} (#${{ github.run_number }})",
               "attachments": [
                 {
                   "color": "good",
@@ -39,8 +59,23 @@ jobs:
                       "short": true
                     },
                     {
-                      "title": "Run",
-                      "value": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>",
+                      "title": "Commit",
+                      "value": "${{ github.sha }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Run #",
+                      "value": "${{ github.run_number }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Test Results",
+                      "value": "Total: ${{ inputs.tests_total }}  |  ✅ Passed: ${{ inputs.tests_passed }}  |  ❌ Failed: ${{ inputs.tests_failed }}  |  ⏭ Skipped: ${{ inputs.tests_skipped }}",
+                      "short": false
+                    },
+                    {
+                      "title": "View Run",
+                      "value": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Open in GitHub Actions>",
                       "short": false
                     }
                   ]
@@ -57,7 +92,7 @@ jobs:
         with:
           payload: |
             {
-              "text": "❌ Tests failed for ${{ github.repository }} (#${{ github.run_number }})",
+              "text": "❌ Tests FAILED — ${{ github.repository }} (#${{ github.run_number }})",
               "attachments": [
                 {
                   "color": "danger",
@@ -73,8 +108,28 @@ jobs:
                       "short": true
                     },
                     {
-                      "title": "Run",
-                      "value": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>",
+                      "title": "Commit",
+                      "value": "${{ github.sha }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Run #",
+                      "value": "${{ github.run_number }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Test Results",
+                      "value": "Total: ${{ inputs.tests_total }}  |  ✅ Passed: ${{ inputs.tests_passed }}  |  ❌ Failed: ${{ inputs.tests_failed }}  |  ⏭ Skipped: ${{ inputs.tests_skipped }}",
+                      "short": false
+                    },
+                    {
+                      "title": "❌ Failed Tests",
+                      "value": "${{ inputs.failed_tests != '' && inputs.failed_tests || 'No failure details available' }}",
+                      "short": false
+                    },
+                    {
+                      "title": "View Full Logs",
+                      "value": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Open in GitHub Actions>",
                       "short": false
                     }
                   ]

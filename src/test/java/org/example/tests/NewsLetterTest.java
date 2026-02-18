@@ -2,8 +2,6 @@
 package org.example.tests;
 
 import org.example.base.Setup;
-import org.example.pages.NewsLetterPage;
-import org.example.pages.SuccessPage;
 import org.example.utils.TestData;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
@@ -17,7 +15,7 @@ public class NewsLetterTest extends Setup {
 
     @Test
     @Order(1)
-    @DisplayName("Verify alert is shown when email input is empty")
+    @DisplayName("TC001: Verify alert is shown when email input is empty")
     void testEmptyEmail() throws InterruptedException {
 
         // Act - hover to show button interaction
@@ -31,20 +29,20 @@ public class NewsLetterTest extends Setup {
 
     @Test
     @Order(2)
-    @DisplayName("Verify alert is shown for invalid email")
+    @DisplayName("TC002: Verify alert is shown for invalid email")
     void testInvalidEmail() throws InterruptedException {
         // Act - hover and subscribe with invalid email
         newsLetterPage.hoverOverSubmitButton();
         newsLetterPage.subscribe(TestData.INVALID_EMAIL);
 
         // Assert
-        Assertions.assertTrue(newsLetterPage.isErrorVisible(), "Error box should be visible for invalid email");
+        Assertions.assertTrue(newsLetterPage.isErrorVisible());
         Assertions.assertEquals(TestData.ERROR_MESSAGE_REQUIRED, newsLetterPage.getErrorMessageText());
     }
 
     @Test
     @Order(3)
-    @DisplayName("Verify successful subscription with valid email")
+    @DisplayName("TC003: Verify successful subscription with valid email")
     void testValidEmail() throws InterruptedException {
         // Act - hover and subscribe with valid email
         newsLetterPage.hoverOverSubmitButton();
@@ -55,12 +53,12 @@ public class NewsLetterTest extends Setup {
 
     @Test
     @Order(4)
-    @DisplayName("Verify dismiss button returns to signup page")
+    @DisplayName("TC004: Verify dismiss button returns to signup page")
     void testDismissButton() throws InterruptedException {
         // Arrange: hover and subscribe to navigate to success page
         newsLetterPage.hoverOverSubmitButton();
         newsLetterPage.subscribe(TestData.VALID_EMAIL);
-        Assertions.assertTrue(successPage.isOnSuccessPage(), "Setup: should be on success page");
+        Assertions.assertTrue(successPage.isOnSuccessPage(), "Setup: should  be on success page");
         Thread.sleep(1000);
 
         // Act - hover and click dismiss button
@@ -72,4 +70,5 @@ public class NewsLetterTest extends Setup {
         Assertions.assertTrue(newsLetterPage.isErrorHidden(), "Error should NOT be visible on fresh signup page");
         Assertions.assertTrue(newsLetterPage.isEmailInputEmpty(), "Email input should be empty on fresh signup page");
     }
+
 }
