@@ -86,7 +86,7 @@ failed_tests       = parse_failed_tests() if status == "failure" else []
 failed_tests_block = format_failed_tests(failed_tests)
 
 # ── Render Jinja2 template ─────────────────────────────────────────────────────
-template_dir = os.path.join(os.path.dirname(__file__), "../templates")
+template_dir = os.path.join(os.getcwd(), ".github", "templates")
 env          = Environment(FileSystemLoader(template_dir))
 template     = env.get_template("slack.jinja")
 

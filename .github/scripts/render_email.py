@@ -71,7 +71,7 @@ else:
 failed_tests = parse_failed_tests() if status == "failure" else []
 
 # ── Render Jinja2 template ─────────────────────────────────────────────────────
-template_dir = os.path.join(os.path.dirname(__file__), "../templates")
+template_dir = os.path.join(os.getcwd(), ".github", "templates")
 env          = Environment(FileSystemLoader(template_dir), autoescape=True)
 template     = env.get_template("email.html")
 
