@@ -9,9 +9,7 @@ import org.openqa.selenium.support.ui.WebDriverWait;
 
 import java.time.Duration;
 
-/**
- * Minimal base page: provides WebDriver and common explicit-wait helpers.
- */
+
 public abstract class BasePage {
     protected final WebDriver driver;
     protected final WebDriverWait wait;
