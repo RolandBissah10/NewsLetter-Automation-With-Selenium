@@ -20,7 +20,7 @@ public class DriverFactory {
         if (isHeadless()) {
             options.addArguments("--headless=new");
         }
-        options.addArguments("--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--window-size=1920,1080");
+        options.addArguments("--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu");
 
         WebDriver driver = new ChromeDriver(options);
         driver.manage().window().setSize(new Dimension(WINDOW_WIDTH, WINDOW_HEIGHT));
@@ -28,7 +28,6 @@ public class DriverFactory {
     }
 
     private static boolean isHeadless() {
-        String defaultValue = System.getenv().containsKey("CI") ? "true" : "false";
-        return Boolean.parseBoolean(System.getProperty("headless", defaultValue));
+        return true;
     }
 }
