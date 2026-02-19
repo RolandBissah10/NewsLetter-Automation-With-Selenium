@@ -36,7 +36,7 @@ public class NewsLetterTest extends Setup {
         newsLetterPage.subscribe(TestData.INVALID_EMAIL);
 
         // Assert
-        Assertions.assertTrue(newsLetterPage.isErrorVisible());
+        Assertions.assertTrue(newsLetterPage.isErrorVisible(),"Should show error message after subscribing");
         Assertions.assertEquals(TestData.ERROR_MESSAGE_REQUIRED, newsLetterPage.getErrorMessageText());
     }
 
@@ -58,7 +58,7 @@ public class NewsLetterTest extends Setup {
         // Arrange: hover and subscribe to navigate to success page
         newsLetterPage.hoverOverSubmitButton();
         newsLetterPage.subscribe(TestData.VALID_EMAIL);
-        Assertions.assertTrue(successPage.isOnSuccessPage(), "Setup: should  be on success page");
+        Assertions.assertTrue(successPage.isOnSuccessPage(), "Should  be on success page");
         Thread.sleep(1000);
 
         // Act - hover and click dismiss button
