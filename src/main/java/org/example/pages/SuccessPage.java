@@ -1,7 +1,6 @@
 package org.example.pages;
 
 import org.example.utils.TestData;
-import org.example.utils.WindowManager;
 import org.openqa.selenium.By;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
@@ -19,42 +18,43 @@ public class SuccessPage extends BasePage {
     @FindBy(id = TestData.DISMISS_BTN)
     private WebElement dismissButton;
 
-    private final WindowManager windowManager;
-
     public SuccessPage(WebDriver driver) {
         super(driver);
-        this.windowManager = new WindowManager(driver);
     }
 
     public boolean isOnSuccessPage() {
-        return windowManager.switchToWindowWith(SUCCESS_MESSAGE_BY) && isVisible(successMessage);
+        switchToWindow(SUCCESS_MESSAGE_BY);
+        return isVisible(successMessage);
     }
 
     public void hoverOverDismissButton() {
-        if (!windowManager.switchToWindowWith(DISMISS_BUTTON_BY)) {
-            throw new IllegalStateException("Success page/window not found");
-        }
+        switchToWindow(DISMISS_BUTTON_BY);
         hoverOver(dismissButton);
     }
 
     public void clickDismiss() {
-        if (!windowManager.switchToWindowWith(DISMISS_BUTTON_BY)) {
-            throw new IllegalStateException("Success page/window not found");
-        }
+        switchToWindow(DISMISS_BUTTON_BY);
         click(dismissButton);
         waitForSignupCard();
     }
 
-    private void waitForSignupCard() {
-        wait.until(d -> {
-            try {
-                if (driver.getWindowHandles().size() == 1) return true;
-                return windowManager.anyWindowContains(SIGNUP_CARD_BY);
-            } catch (Exception ignored) {
-            }
-            return false;
-        });
+    private void switchToWindow(By locator) {
+        for (String handle : driver.getWindowHandles()) {
+            driver.switchTo().window(handle);
+            if (!driver.findElements(locator).isEmpty()) return;
+        }
+    }
 
-        windowManager.switchToWindowWithOrFirst(SIGNUP_CARD_BY);
+    private void waitForSignupCard() {
+        wait.until(d -> driver.getWindowHandles().size() == 1 || anyWindowHas(SIGNUP_CARD_BY));
+        switchToWindow(SIGNUP_CARD_BY);
+    }
+
+    private boolean anyWindowHas(By locator) {
+        for (String handle : driver.getWindowHandles()) {
+            driver.switchTo().window(handle);
+            if (!driver.findElements(locator).isEmpty()) return true;
+        }
+        return false;
     }
 }
